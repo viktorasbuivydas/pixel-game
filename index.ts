@@ -1,7 +1,8 @@
 import { Application } from "pixi.js";
 import { initDevtools } from "@pixi/devtools";
 import { SceneManager } from "./src/core/SceneManager";
-import { MenuScene } from "./src/scenes/MenuScene";
+// import { MenuScene } from "./src/scenes/MenuScene";
+import { MainScene } from "./src/scenes/MainScene";
 
 (async (): Promise<void> => {
   // Create a new application
@@ -18,9 +19,9 @@ import { MenuScene } from "./src/scenes/MenuScene";
   document.body.appendChild(app.canvas);
 
   // Initialize and show menu scene
-  const menuScene = new MenuScene();
-  menuScene.initialize();
-  SceneManager.changeScene(menuScene);
+  const mainScene = new MainScene();
+  mainScene.initialize();
+  SceneManager.changeScene(mainScene);
 
   // Game loop - update current scene
   app.ticker.add((time) => {

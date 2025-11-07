@@ -1,25 +1,19 @@
-import { Container, Graphics, Text, TextStyle } from "pixi.js";
-import { Scene } from "./Scene";
-import { SceneManager } from "../core/SceneManager";
-import { MenuScene } from "./MenuScene";
+import { Container, Text, TextStyle, Graphics } from "pixi.js";
 
-export class Level1GameScene extends Scene {
-  private gameContainer: Container;
+export class MainSceneUi extends Container {
   private scoreText: Text;
-  private score: number = 0;
+  private levelText: Text;
   private backButton: Graphics;
   private backButtonText: Text;
   private buttonContainer: Container;
 
-  initialize(): void {
-    const app = window.app;
-    const screenWidth = app.screen.width;
-    const screenHeight = app.screen.height;
+  constructor(screenWidth: number, screenHeight: number) {
+    super();
+    this.createUi(screenWidth, screenHeight);
+  }
 
-    // Create game container for game elements
-    this.gameContainer = new Container();
-
-    // Create score display
+  private createUi(screenWidth: number, screenHeight: number): void {
+    // Score Text
     const scoreStyle = new TextStyle({
       fontFamily: "Arial",
       fontSize: 32,
@@ -28,13 +22,14 @@ export class Level1GameScene extends Scene {
     });
 
     this.scoreText = new Text({
-      text: `Score: ${this.score}`,
+      text: "Score: 0",
       style: scoreStyle,
     });
     this.scoreText.x = 20;
     this.scoreText.y = 20;
+    this.addChild(this.scoreText);
 
-    // Create level label
+    // Level Text
     const levelStyle = new TextStyle({
       fontFamily: "Arial",
       fontSize: 28,
@@ -42,15 +37,16 @@ export class Level1GameScene extends Scene {
       align: "center",
     });
 
-    const levelText = new Text({
+    this.levelText = new Text({
       text: "LEVEL 1",
       style: levelStyle,
     });
-    levelText.anchor.set(0.5);
-    levelText.x = screenWidth / 2;
-    levelText.y = 50;
+    this.levelText.anchor.set(0.5);
+    this.levelText.x = screenWidth / 2;
+    this.levelText.y = 50;
+    this.addChild(this.levelText);
 
-    // Create back button
+    // Back Button
     this.buttonContainer = new Container();
     this.buttonContainer.x = 100;
     this.buttonContainer.y = screenHeight - 50;
@@ -77,8 +73,9 @@ export class Level1GameScene extends Scene {
 
     this.buttonContainer.addChild(this.backButton);
     this.buttonContainer.addChild(this.backButtonText);
+    this.addChild(this.buttonContainer);
 
-    // Add hover effect
+    // Hover Effects
     this.buttonContainer.on("pointerenter", () => {
       this.backButton.clear();
       this.backButton.roundRect(-60, -20, 120, 40, 8);
@@ -92,47 +89,26 @@ export class Level1GameScene extends Scene {
       this.backButton.fill(0x666666);
       this.backButton.stroke({ width: 2, color: 0xffffff });
     });
-
-    // Add click handler to return to menu
-    this.buttonContainer.on("pointerdown", () => {
-      const menuScene = new MenuScene();
-      menuScene.initialize();
-      SceneManager.changeScene(menuScene);
-    });
-
-    // Create a simple game element (placeholder)
-    const gameElement = new Graphics();
-    gameElement.circle(0, 0, 30);
-    gameElement.fill(0x00ff00);
-    gameElement.x = screenWidth / 2;
-    gameElement.y = screenHeight / 2;
-    this.gameContainer.addChild(gameElement);
-
-    // Add all elements to scene
-    this.addChild(this.scoreText);
-    this.addChild(levelText);
-    this.addChild(this.gameContainer);
-    this.addChild(this.buttonContainer);
-
-    // Example: Increment score over time
-    window.app.ticker.add(this.updateScore, this);
   }
 
-  private updateScore = (): void => {
-    this.score += 0.1;
-    this.scoreText.text = `Score: ${Math.floor(this.score)}`;
-  };
-
-  update(deltaTime: number): void {
-    // Update game logic here
-    // For example, move game elements, check collisions, etc.
+  setScore(value: number): void {
+    this.scoreText.text = `Score: ${Math.floor(value)}`;
   }
 
-  destroy(): void {
-    window.app.ticker.remove(this.updateScore, this);
+  setLevel(level: number): void {
+    this.levelText.text = `LEVEL ${level}`;
+  }
+
+  onBack(callback: () => void): void {
+    this.buttonContainer.removeAllListeners("pointerdown");
+    this.buttonContainer.on("pointerdown", callback);
+  }
+
+  destroy(options?: any): void {
     this.buttonContainer.off("pointerenter");
     this.buttonContainer.off("pointerleave");
     this.buttonContainer.off("pointerdown");
     this.removeChildren();
+    super.destroy(options);
   }
 }

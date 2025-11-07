@@ -1,7 +1,7 @@
 import { Container, Graphics, Text, TextStyle } from "pixi.js";
 import { Scene } from "./Scene";
 import { SceneManager } from "../core/SceneManager";
-import { Level1GameScene } from "./Level1GameScene";
+import { MainScene } from "./MainScene";
 
 export class MenuScene extends Scene {
   private titleText: Text;
@@ -75,7 +75,7 @@ export class MenuScene extends Scene {
 
     // Add click handler to start game
     this.buttonContainer.on("pointerdown", () => {
-      const gameScene = new Level1GameScene();
+      const gameScene = new MainScene();
       gameScene.initialize();
       SceneManager.changeScene(gameScene);
     });
