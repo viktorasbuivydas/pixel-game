@@ -7,7 +7,6 @@ import { MainSceneUi } from "./ui/MainSceneUi";
 export class MainScene extends Scene {
   private gameContainer: Container;
   private ui: MainSceneUi;
-  private score: number = 0;
   private level: number = 1;
 
   initialize(): void {
@@ -17,7 +16,6 @@ export class MainScene extends Scene {
 
     // Create UI
     this.ui = new MainSceneUi(screenWidth, screenHeight);
-    this.ui.setScore(this.score);
     this.ui.setLevel(this.level);
 
     // Handle "MENU" button
@@ -41,15 +39,7 @@ export class MainScene extends Scene {
     // Add everything to scene
     this.addChild(this.ui);
     this.addChild(this.gameContainer);
-
-    // Increment score over time
-    window.app.ticker.add(this.updateScore, this);
   }
-
-  private updateScore = (): void => {
-    this.score += 0.1;
-    this.ui.setScore(this.score);
-  };
 
   update(deltaTime: number): void {
     // Update game logic here
@@ -57,7 +47,6 @@ export class MainScene extends Scene {
   }
 
   destroy(): void {
-    window.app.ticker.remove(this.updateScore, this);
     this.ui.destroy();
     this.removeChildren();
   }
