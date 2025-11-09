@@ -65,6 +65,15 @@ export class MainScene extends Scene {
 
     const worldBounds = await groundManager.generate();
 
+    // Set viewport bounds to prevent showing out-of-bounds areas
+    this.viewport.clamp({
+      left: worldBounds.minX,
+      top: worldBounds.minY,
+      right: worldBounds.maxX,
+      bottom: worldBounds.maxY,
+      direction: "all",
+    });
+
     // Create tank sprites
     const tankSprites = await TankFactory.create({
       bodyTextureUrl: tankBody,
