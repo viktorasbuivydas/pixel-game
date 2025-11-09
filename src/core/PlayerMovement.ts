@@ -1,4 +1,5 @@
 import { Sprite, Application, Container, Point } from "pixi.js";
+import { WorldBounds } from "../types/WorldBounds";
 
 // Improved input handling for PixiJS
 class PixiInput {
@@ -56,18 +57,13 @@ export class PlayerMovement {
   private targetTankAngle: number = 0; // target angle for smooth rotation
   private rotateSpeed: number = 0.15; // controls turn speed, radians per frame at delta=1
   private lastGunAngle: number = 0;
-  private worldBounds: {
-    minX: number;
-    minY: number;
-    maxX: number;
-    maxY: number;
-  } | null = null;
+  private worldBounds: WorldBounds | null = null;
 
   constructor(
     app: Application,
     tankSprite: Sprite,
     tankGunSprite: Sprite,
-    worldBounds?: { minX: number; minY: number; maxX: number; maxY: number }
+    worldBounds?: WorldBounds
   ) {
     this.app = app;
     this.tankSprite = tankSprite;
