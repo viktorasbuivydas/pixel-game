@@ -12,6 +12,8 @@
   "description": "",
   "dependencies": {
     "@pixi/devtools": "^2.0.1",
+    "@pixi/tilemap": "^5.0.2",
+    "pixi-viewport": "^6.0.3",
     "pixi.js": "^8.14.0"
   },
   "devDependencies": {
