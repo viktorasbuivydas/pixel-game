@@ -56,12 +56,24 @@ export class PlayerMovement {
   private targetTankAngle: number = 0; // target angle for smooth rotation
   private rotateSpeed: number = 0.15; // controls turn speed, radians per frame at delta=1
   private lastGunAngle: number = 0;
+  private worldBounds: {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+  } | null = null;
 
-  constructor(app: Application, tankSprite: Sprite, tankGunSprite: Sprite) {
+  constructor(
+    app: Application,
+    tankSprite: Sprite,
+    tankGunSprite: Sprite,
+    worldBounds?: { minX: number; minY: number; maxX: number; maxY: number }
+  ) {
     this.app = app;
     this.tankSprite = tankSprite;
     this.tankGunSprite = tankGunSprite;
     this.lastGunAngle = tankGunSprite.rotation;
+    this.worldBounds = worldBounds || null;
     this.setupMouseTracking();
   }
 
@@ -116,6 +128,26 @@ export class PlayerMovement {
     // Move tank
     this.tankSprite.x += moveX * this.speed * delta;
     this.tankSprite.y += moveY * this.speed * delta;
+
+    // Clamp player position within world bounds
+    if (this.worldBounds) {
+      // Account for sprite anchor point (0.5, 0.5) and scaled size
+      const tankWidth =
+        this.tankSprite.width * Math.abs(this.tankSprite.scale.x);
+      const tankHeight =
+        this.tankSprite.height * Math.abs(this.tankSprite.scale.y);
+      const halfWidth = tankWidth / 2;
+      const halfHeight = tankHeight / 2;
+
+      this.tankSprite.x = Math.max(
+        this.worldBounds.minX + halfWidth,
+        Math.min(this.worldBounds.maxX - halfWidth, this.tankSprite.x)
+      );
+      this.tankSprite.y = Math.max(
+        this.worldBounds.minY + halfHeight,
+        Math.min(this.worldBounds.maxY - halfHeight, this.tankSprite.y)
+      );
+    }
 
     // Move the gun together with the tank base
     this.tankGunSprite.x = this.tankSprite.x;

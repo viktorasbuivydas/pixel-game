@@ -54,6 +54,7 @@ export class MainScene extends Scene {
     // Create a 100x100 grid of ground tiles
     const tilesX = 258 / 4;
     const tilesY = 258 / 4;
+    const tileSize = 64; // 256 * 0.25 = 64
 
     for (let i = 0; i < tilesX; i++) {
       for (let j = 0; j < tilesY; j++) {
@@ -64,19 +65,25 @@ export class MainScene extends Scene {
         // Scale down by half
         tile.scale.set(0.25, 0.25);
         // Take into account the scale so the tile/grid remains seamless
-        tile.x = i * 64;
-        tile.y = j * 64;
+        tile.x = i * tileSize;
+        tile.y = j * tileSize;
         this.viewport.addChild(tile);
       }
     }
+
+    // Calculate world boundaries based on tile grid
+    const worldMinX = 20;
+    const worldMinY = 20;
+    const worldMaxX = tilesX * tileSize;
+    const worldMaxY = tilesY * tileSize;
 
     // Load tank body and gun textures and create sprites
     const tankTexture = await Assets.load(tankBody);
     const tankSprite = new Sprite(tankTexture);
     // Scale down by half
     tankSprite.scale.set(0.25, 0.25);
-    tankSprite.x = 1024;
-    tankSprite.y = 1024;
+    tankSprite.x = 100;
+    tankSprite.y = 100;
     tankSprite.anchor.set(0.5);
 
     this.tankSprite = tankSprite;
@@ -98,11 +105,17 @@ export class MainScene extends Scene {
     this.addChild(this.ui);
     this.addChild(this.viewport);
 
-    // Implement player movement
+    // Implement player movement with world boundaries
     this.playerMovement = new PlayerMovement(
       app,
       this.tankSprite,
-      this.tankGunSprite
+      this.tankGunSprite,
+      {
+        minX: worldMinX,
+        minY: worldMinY,
+        maxX: worldMaxX,
+        maxY: worldMaxY,
+      }
     );
 
     // Make camera follow the player tank
