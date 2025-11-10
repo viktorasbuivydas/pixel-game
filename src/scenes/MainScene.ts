@@ -20,6 +20,9 @@ import tankMovingSound from "../assets/sounds/tank-moving.mp3";
 import tankRotatingSound from "../assets/sounds/tank-rotating.mp3";
 import { Multiplayer } from "../core/Multiplayer";
 import { getStateCallbacks } from "colyseus.js";
+import { CookieUtils } from "../core/CookieUtils";
+import { UsernamePrompt } from "../core/UsernamePrompt";
+import { PlayersListModal, PlayerInfo } from "./mainScene/PlayersListModal";
 
 export class MainScene extends Scene {
   private viewport!: Viewport;
@@ -31,12 +34,46 @@ export class MainScene extends Scene {
   private multiplayer!: Multiplayer;
   private playerEntities: { [sessionId: string]: any } = {};
   private currentSessionId: string | undefined; // <--- Track our own session ID
+  private username: string = "";
+  private playersListModal!: PlayersListModal;
+  private playerUsernames: { [sessionId: string]: string } = {}; // Track usernames for all players
 
   async initialize(): Promise<void> {
     const app = window.app as PIXI.Application;
     const screenWidth = app.screen.width;
     const screenHeight = app.screen.height;
 
+    // Get username from cookie or prompt for it
+    const savedUsername = CookieUtils.get("username");
+    if (savedUsername) {
+      this.username = savedUsername;
+      await this.initializeGame(app, screenWidth, screenHeight);
+    } else {
+      // Show username prompt
+      const usernamePrompt = new UsernamePrompt(
+        screenWidth,
+        screenHeight,
+        "",
+        async (username: string) => {
+          this.username = username;
+          // Save to cookie
+          CookieUtils.set("username", username);
+          // Remove prompt
+          this.removeChild(usernamePrompt);
+          usernamePrompt.destroy();
+          // Initialize game
+          await this.initializeGame(app, screenWidth, screenHeight);
+        }
+      );
+      this.addChild(usernamePrompt);
+    }
+  }
+
+  private async initializeGame(
+    app: PIXI.Application,
+    screenWidth: number,
+    screenHeight: number
+  ): Promise<void> {
     // Initialize multiplayer client
     let host = import.meta.env.VITE_COLYSEUS_HOST || "http://localhost:2567";
     // If host doesn't start with http:// or https://, add http:// and default port
@@ -49,6 +86,13 @@ export class MainScene extends Scene {
     this.ui = new Ui(screenWidth, screenHeight);
     this.ui.setLevel(this.level);
 
+    // Create players list modal
+    this.playersListModal = new PlayersListModal(screenWidth, screenHeight);
+    this.addChild(this.playersListModal);
+
+    // Setup Tab key listener for players list
+    this.setupPlayersListKeyboard();
+
     // Handle "MENU" button
     this.ui.onBack(() => {
       const menuScene = new MenuScene();
@@ -56,7 +100,7 @@ export class MainScene extends Scene {
       SceneManager.changeScene(menuScene);
     });
 
-    // Create viewport
+    // Create viewport (will be updated with actual world size after map generation)
     this.viewport = ViewportManager.create(app, {
       screenWidth: 1000,
       screenHeight: 1000,
@@ -65,10 +109,10 @@ export class MainScene extends Scene {
     });
 
     // Generate ground tiles
-    const tilesX = 258 / 4;
-    const tilesY = 258 / 4;
+    const tilesX = 64;
+    const tilesY = 64;
     const tileSize = 64;
-    const tileScale = 0.25;
+    const tileScale = 1;
 
     const groundManager = new GroundManager(this.viewport, {
       tilesX,
@@ -114,6 +158,15 @@ export class MainScene extends Scene {
       const $ = getStateCallbacks(room);
       // Listen for players being added
       $(room.state).players.onAdd(async (player, sessionId) => {
+        // Determine username for this player
+        const playerUsername =
+          sessionId === this.currentSessionId
+            ? this.username
+            : `Player ${sessionId.slice(0, 6)}`;
+
+        // Store username for this player
+        this.playerUsernames[sessionId] = playerUsername;
+
         // Always create a new tank for each player added to the room
         const entity = await TankFactory.create({
           bodyTextureUrl: tankBody,
@@ -121,6 +174,7 @@ export class MainScene extends Scene {
           scale: 0.25,
           initialX: 100,
           initialY: 100,
+          username: playerUsername,
         });
 
         // Create minimap for *this* client only, when *our own* entity is created
@@ -137,6 +191,7 @@ export class MainScene extends Scene {
         }
 
         // Initialize tank position (from server/player if needed)
+        // Sprites are at world positions, container is just a grouping
         entity.body.x = player.x || 100;
         entity.body.y = player.y || 100;
         entity.gun.x = entity.body.x;
@@ -150,12 +205,18 @@ export class MainScene extends Scene {
           this.tankSprite = entity.body;
           this.tankGunSprite = entity.gun;
 
-          // Add player's tank to the viewport (if not already present)
+          // Add player's tank to the viewport
           if (!this.viewport.children.includes(entity.body)) {
             this.viewport.addChild(entity.body);
           }
           if (!this.viewport.children.includes(entity.gun)) {
             this.viewport.addChild(entity.gun);
+          }
+          if (
+            entity.usernameLabel &&
+            !this.viewport.children.includes(entity.usernameLabel)
+          ) {
+            this.viewport.addChild(entity.usernameLabel);
           }
 
           // Init player movement for our own tank
@@ -192,16 +253,31 @@ export class MainScene extends Scene {
           });
 
           // Always have camera follow *our* tank (viewport only follows our tank)
-          this.viewport.follow(this.tankSprite, { speed: 0 });
+          this.viewport.follow(entity.body, { speed: 0 });
         } else {
-          // For now, add other players' tanks to viewport but don't control them
+          // Add other players' tanks to viewport
           if (!this.viewport.children.includes(entity.body)) {
             this.viewport.addChild(entity.body);
           }
           if (!this.viewport.children.includes(entity.gun)) {
             this.viewport.addChild(entity.gun);
           }
+          if (
+            entity.usernameLabel &&
+            !this.viewport.children.includes(entity.usernameLabel)
+          ) {
+            this.viewport.addChild(entity.usernameLabel);
+          }
         }
+
+        // Update players list modal
+        this.updatePlayersList();
+      });
+
+      // Listen for players being removed
+      $(room.state).players.onRemove((_player, sessionId) => {
+        delete this.playerUsernames[sessionId];
+        this.updatePlayersList();
       });
 
       // Access multiplayer state changes via the multiplayer object instead of using $ directly.
@@ -211,12 +287,20 @@ export class MainScene extends Scene {
           console.log("state player", player);
           const entity = this.playerEntities[player.sessionId];
           if (entity) {
+            // Update sprite positions
             entity.body.x = player.x;
             entity.body.y = player.y;
+            entity.gun.x = player.x;
+            entity.gun.y = player.y;
+            // Update body rotation
             entity.body.rotation = player.rotation;
-            entity.gun.x = entity.body.x;
-            entity.gun.y = entity.body.y;
+            // Update gun rotation
             entity.gun.rotation = player.gunRotation;
+            // Update username label position
+            if (entity.usernameLabel) {
+              entity.usernameLabel.x = player.x;
+              entity.usernameLabel.y = player.y - entity.body.height * 0.5 - 15;
+            }
             console.log("entity", entity.body.x, entity.body.y);
           }
         });
@@ -231,6 +315,17 @@ export class MainScene extends Scene {
   update(deltaTime: number): void {
     // Only update our own tank's controls/camera
     this.playerMovement?.update(deltaTime);
+
+    // Sync username label position with tank position
+    const ourEntity = this.currentSessionId
+      ? this.playerEntities[this.currentSessionId]
+      : null;
+    if (ourEntity && ourEntity.usernameLabel && this.tankSprite) {
+      // Update username label position to stay above tank
+      ourEntity.usernameLabel.x = this.tankSprite.x;
+      ourEntity.usernameLabel.y =
+        this.tankSprite.y - this.tankSprite.height * 0.5 - 15;
+    }
 
     // Always keep the camera on our tank if it exists
     if (this.tankSprite && this.viewport) {
@@ -255,9 +350,48 @@ export class MainScene extends Scene {
     }
   }
 
+  private tabKeyHandler = (e: KeyboardEvent) => {
+    if (e.key === "Tab") {
+      e.preventDefault(); // Prevent default tab behavior
+      this.playersListModal.toggle();
+    }
+  };
+
+  /**
+   * Setup keyboard listener for Tab key to show/hide players list
+   */
+  private setupPlayersListKeyboard(): void {
+    window.addEventListener("keydown", this.tabKeyHandler);
+  }
+
+  /**
+   * Update the players list modal with current players
+   */
+  private updatePlayersList(): void {
+    const players: PlayerInfo[] = Object.keys(this.playerUsernames).map(
+      (sessionId) => ({
+        sessionId,
+        username: this.playerUsernames[sessionId],
+        isCurrentPlayer: sessionId === this.currentSessionId,
+      })
+    );
+
+    // Sort: current player first, then others
+    players.sort((a, b) => {
+      if (a.isCurrentPlayer) return -1;
+      if (b.isCurrentPlayer) return 1;
+      return a.username.localeCompare(b.username);
+    });
+
+    this.playersListModal.updatePlayers(players);
+  }
+
   destroy(): void {
     // Leave multiplayer room before destroying scene
     this.multiplayer?.leave();
+
+    // Remove keyboard listeners
+    window.removeEventListener("keydown", this.tabKeyHandler);
 
     this.ui.destroy();
     this.removeChildren();
