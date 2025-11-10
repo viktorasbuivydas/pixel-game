@@ -9,7 +9,7 @@ const os = require('os');
 module.exports = {
   apps : [{
     name: "colyseus-app",
-    script: 'lib/index.js',
+    script: 'build/server/src/index.js',
     time: true,
     watch: false,
     instances: os.cpus().length,
@@ -18,15 +18,5 @@ module.exports = {
     env_production: {
       NODE_ENV: 'production'
     }
-  }],
-  deploy : {
-    production : {
-      "user" : "deploy",
-      "host" : ["70.34.250.153"],
-      "ref"  : "origin/main",
-      "repo" : "git@github.com:viktorasbuivydas/pixel-game.git",
-      "path" : "/home/deploy",
-      "post-deploy" : "npm install && npm run build && npm exec colyseus-post-deploy"
-    }
-  }
+  }]
 };

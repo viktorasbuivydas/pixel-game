@@ -52,20 +52,5 @@ export default config({
     app.use("/monitor", monitor());
   },
 
-  beforeListen: () => {
-    /**
-     * Override the matchmaker's CORS headers to allow requests from the client
-     */
-    const allowedOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
-
-    matchMaker.controller.getCorsHeaders = function (req) {
-      return {
-        "Access-Control-Allow-Origin": allowedOrigin,
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        Vary: "Origin",
-      };
-    };
-  },
+  beforeListen: () => {},
 });
