@@ -38,7 +38,12 @@ export class MainScene extends Scene {
     const screenHeight = app.screen.height;
 
     // Initialize multiplayer client
-    this.multiplayer = new Multiplayer("http://localhost:2567");
+    let host = import.meta.env.VITE_COLYSEUS_HOST || "http://localhost:2567";
+    // If host doesn't start with http:// or https://, add http:// and default port
+    if (host && !host.startsWith("http://") && !host.startsWith("https://")) {
+      host = `http://${host}:2567`;
+    }
+    this.multiplayer = new Multiplayer(host);
 
     // Create UI
     this.ui = new Ui(screenWidth, screenHeight);
