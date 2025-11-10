@@ -202,7 +202,7 @@ export class MainScene extends Scene {
       // Access multiplayer state changes via the multiplayer object instead of using $ directly.
       this.multiplayer.onStateChange((state) => {
         // console.log("state", state);
-        state.players.forEach((player) => {
+        state.players?.forEach((player) => {
           console.log("state player", player);
           const entity = this.playerEntities[player.sessionId];
           if (entity) {
