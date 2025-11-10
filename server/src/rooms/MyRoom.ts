@@ -14,14 +14,13 @@ export class MyRoom extends Room<MyRoomState> {
     });
 
     this.onMessage("player-input", (client, message) => {
-      console.log("player-input", message);
+      const player = this.state.players.get(client.id);
 
-      const player = this.state.players.get(client.sessionId);
-
-      console.log("player", player);
-      console.log("message", message);
       player.x = message.x;
       player.y = message.y;
+      player.sessionId = client.sessionId;
+      player.rotation = message.rotation;
+      player.gunRotation = message.gunRotation;
     });
   }
 

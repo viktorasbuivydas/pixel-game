@@ -198,15 +198,15 @@ export class MainScene extends Scene {
       this.multiplayer.onStateChange((state) => {
         // console.log("state", state);
         state.players.forEach((player) => {
-          console.log("player", player);
-
-          const entity =
-            this.playerEntities[this.multiplayer.getClient().sessionId];
+          console.log("state player", player);
+          const entity = this.playerEntities[player.sessionId];
           if (entity) {
             entity.body.x = player.x;
             entity.body.y = player.y;
+            entity.body.rotation = player.rotation;
             entity.gun.x = entity.body.x;
             entity.gun.y = entity.body.y;
+            entity.gun.rotation = player.gunRotation;
             console.log("entity", entity.body.x, entity.body.y);
           }
         });

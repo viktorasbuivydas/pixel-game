@@ -5,9 +5,21 @@ import { MainScene } from "./MainScene";
 
 export class MenuScene extends Scene {
   private titleText: Text;
-  private startButton: Graphics;
-  private startButtonText: Text;
-  private buttonContainer: Container;
+  private buttonContainers: Container[] = [];
+  private gameModes = [
+    {
+      label: "Battle Royale",
+      value: "battle_royale",
+      color: 0x4a90e2,
+      hoverColor: 0x5aa0f2,
+    },
+    {
+      label: "Capture the Flag",
+      value: "capture_the_flag",
+      color: 0xe24a4a,
+      hoverColor: 0xf25a5a,
+    },
+  ];
 
   initialize(): void {
     const app = window.app;
@@ -30,18 +42,7 @@ export class MenuScene extends Scene {
     this.titleText.x = screenWidth / 2;
     this.titleText.y = screenHeight / 3;
 
-    // Create start button
-    this.buttonContainer = new Container();
-    this.buttonContainer.x = screenWidth / 2;
-    this.buttonContainer.y = screenHeight / 2;
-    this.buttonContainer.eventMode = "static";
-    this.buttonContainer.cursor = "pointer";
-
-    this.startButton = new Graphics();
-    this.startButton.roundRect(-100, -25, 200, 50, 10);
-    this.startButton.fill(0x4a90e2);
-    this.startButton.stroke({ width: 2, color: 0xffffff });
-
+    // Create buttons for each game mode
     const buttonTextStyle = new TextStyle({
       fontFamily: "Arial",
       fontSize: 24,
@@ -49,40 +50,89 @@ export class MenuScene extends Scene {
       align: "center",
     });
 
-    this.startButtonText = new Text({
-      text: "START GAME",
-      style: buttonTextStyle,
-    });
-    this.startButtonText.anchor.set(0.5);
+    const buttonSpacing = 80;
+    const buttonWidth = 260;
+    const buttonHeight = 50;
+    const buttonCorner = 14;
 
-    this.buttonContainer.addChild(this.startButton);
-    this.buttonContainer.addChild(this.startButtonText);
+    this.buttonContainers = [];
 
-    // Add hover effect
-    this.buttonContainer.on("pointerenter", () => {
-      this.startButton.clear();
-      this.startButton.roundRect(-100, -25, 200, 50, 10);
-      this.startButton.fill(0x5aa0f2);
-      this.startButton.stroke({ width: 2, color: 0xffffff });
-    });
+    for (let i = 0; i < this.gameModes.length; i++) {
+      const mode = this.gameModes[i];
 
-    this.buttonContainer.on("pointerleave", () => {
-      this.startButton.clear();
-      this.startButton.roundRect(-100, -25, 200, 50, 10);
-      this.startButton.fill(0x4a90e2);
-      this.startButton.stroke({ width: 2, color: 0xffffff });
-    });
+      // Button container handles pointer events
+      const buttonContainer = new Container();
+      buttonContainer.x = screenWidth / 2;
+      buttonContainer.y =
+        screenHeight / 2 +
+        i * buttonSpacing -
+        ((this.gameModes.length - 1) * buttonSpacing) / 2;
+      buttonContainer.eventMode = "static";
+      buttonContainer.cursor = "pointer";
 
-    // Add click handler to start game
-    this.buttonContainer.on("pointerdown", () => {
-      const gameScene = new MainScene();
-      gameScene.initialize();
-      SceneManager.changeScene(gameScene);
-    });
+      // Graphics for the button background
+      const buttonGraphics = new Graphics();
+      buttonGraphics.roundRect(
+        -buttonWidth / 2,
+        -buttonHeight / 2,
+        buttonWidth,
+        buttonHeight,
+        buttonCorner
+      );
+      buttonGraphics.fill(mode.color);
+      buttonGraphics.stroke({ width: 2, color: 0xffffff });
+
+      // Button label
+      const buttonText = new Text({
+        text: mode.label,
+        style: buttonTextStyle,
+      });
+      buttonText.anchor.set(0.5);
+
+      buttonContainer.addChild(buttonGraphics);
+      buttonContainer.addChild(buttonText);
+
+      // Hover effects
+      buttonContainer.on("pointerenter", () => {
+        buttonGraphics.clear();
+        buttonGraphics.roundRect(
+          -buttonWidth / 2,
+          -buttonHeight / 2,
+          buttonWidth,
+          buttonHeight,
+          buttonCorner
+        );
+        buttonGraphics.fill(mode.hoverColor);
+        buttonGraphics.stroke({ width: 2, color: 0xffffff });
+      });
+
+      buttonContainer.on("pointerleave", () => {
+        buttonGraphics.clear();
+        buttonGraphics.roundRect(
+          -buttonWidth / 2,
+          -buttonHeight / 2,
+          buttonWidth,
+          buttonHeight,
+          buttonCorner
+        );
+        buttonGraphics.fill(mode.color);
+        buttonGraphics.stroke({ width: 2, color: 0xffffff });
+      });
+
+      // Click handler
+      buttonContainer.on("pointerdown", () => {
+        // Optionally: Pass game mode to MainScene via constructor/options
+        const gameScene = new MainScene({ gameMode: mode.value });
+        gameScene.initialize();
+        SceneManager.changeScene(gameScene);
+      });
+
+      this.buttonContainers.push(buttonContainer);
+    }
 
     // Add all elements to scene
     this.addChild(this.titleText);
-    this.addChild(this.buttonContainer);
+    this.buttonContainers.forEach((container) => this.addChild(container));
   }
 
   update(deltaTime: number): void {
@@ -90,9 +140,12 @@ export class MenuScene extends Scene {
   }
 
   destroy(): void {
-    this.buttonContainer.off("pointerenter");
-    this.buttonContainer.off("pointerleave");
-    this.buttonContainer.off("pointerdown");
+    // Remove listeners and children for all mode buttons
+    this.buttonContainers.forEach((container) => {
+      container.off("pointerenter");
+      container.off("pointerleave");
+      container.off("pointerdown");
+    });
     this.removeChildren();
   }
 }
