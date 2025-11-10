@@ -2,12 +2,14 @@ import { Container, Text, TextStyle, Graphics } from "pixi.js";
 import { Minimap } from "./Minimap";
 
 export class Ui extends Container {
-  private scoreText: Text;
-  private levelText: Text;
-  private backButton: Graphics;
-  private backButtonText: Text;
-  private buttonContainer: Container;
+  private scoreText!: Text;
+  private levelText!: Text;
+  private backButton!: Graphics;
+  private backButtonText!: Text;
+  private buttonContainer!: Container;
   private minimap: Minimap | undefined;
+  private pingText!: Text;
+  private fpsText!: Text;
 
   constructor(screenWidth: number, screenHeight: number) {
     super();
@@ -99,6 +101,34 @@ export class Ui extends Container {
       this.backButton.fill(0x666666);
       this.backButton.stroke({ width: 2, color: 0xffffff });
     });
+
+    // Ping and FPS text in top right
+    const statsStyle = new TextStyle({
+      fontFamily: "Arial",
+      fontSize: 16,
+      fill: 0xffffff,
+      align: "right",
+    });
+
+    this.pingText = new Text({
+      text: "Ping: --ms",
+      style: statsStyle,
+    });
+    this.pingText.anchor.set(1, 0); // Right align
+    this.pingText.x = screenWidth - 20;
+    this.pingText.y = 20;
+    this.pingText.zIndex = 10;
+    this.addChild(this.pingText);
+
+    this.fpsText = new Text({
+      text: "FPS: --",
+      style: statsStyle,
+    });
+    this.fpsText.anchor.set(1, 0); // Right align
+    this.fpsText.x = screenWidth - 20;
+    this.fpsText.y = 45;
+    this.fpsText.zIndex = 10;
+    this.addChild(this.fpsText);
   }
 
   setScore(value: number): void {
@@ -121,6 +151,14 @@ export class Ui extends Container {
 
   updateMinimap(): void {
     this.minimap?.update();
+  }
+
+  setPing(latency: number): void {
+    this.pingText.text = `Ping: ${Math.round(latency)}ms`;
+  }
+
+  setFps(fps: number): void {
+    this.fpsText.text = `FPS: ${Math.round(fps)}`;
   }
 
   onBack(callback: () => void): void {

@@ -106,6 +106,11 @@ export class MainScene extends Scene {
       // Store our current session id for correct viewport-follow logic
       this.currentSessionId = room.sessionId;
 
+      // Setup ping listener
+      this.multiplayer.onPingUpdate((latency, _timeOffset) => {
+        this.ui.setPing(latency);
+      });
+
       const $ = getStateCallbacks(room);
       // Listen for players being added
       $(room.state).players.onAdd(async (player, sessionId) => {
@@ -242,6 +247,12 @@ export class MainScene extends Scene {
       );
     }
     this.ui?.updateMinimap();
+
+    // Update FPS
+    const app = window.app as PIXI.Application;
+    if (app && app.ticker) {
+      this.ui.setFps(app.ticker.FPS);
+    }
   }
 
   destroy(): void {

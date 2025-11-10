@@ -22,6 +22,18 @@ export class MyRoom extends Room<MyRoomState> {
       player.rotation = message.rotation;
       player.gunRotation = message.gunRotation;
     });
+
+    // Handle ping messages and respond with pong
+    this.onMessage("ping", (client, message) => {
+      console.log("Received ping from", client.sessionId, message);
+      // Respond with pong containing the server timestamp
+      const serverTime = Date.now();
+      console.log("Sending pong with timestamp:", serverTime);
+      client.send("pong", {
+        ts: serverTime,
+        type: "pong",
+      });
+    });
   }
 
   onJoin(client: Client, options: any) {

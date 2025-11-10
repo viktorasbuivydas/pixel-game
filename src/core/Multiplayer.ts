@@ -26,6 +26,15 @@ export class Multiplayer {
   /** Array of listeners to be called on state change */
   private stateChangeListeners: Array<(state: MyRoomState) => void> = [];
 
+  // Ping functionality
+  private pingInterval: NodeJS.Timeout | number | null = null;
+  private lastPingTime: number = 0;
+  private lastPingPerf: DOMHighResTimeStamp = 0;
+  private lastOffsets: number[] = [];
+  private pingListeners: Array<(latency: number, timeOffset: number) => void> =
+    [];
+  private static readonly TIME_OFFSET_SAMPLES = 5;
+
   constructor(serverUrl: string = "http://localhost:2567") {
     this.serverUrl = serverUrl;
     this.client = new Client(serverUrl);
@@ -168,6 +177,7 @@ export class Multiplayer {
 
     this.room.onLeave((code) => {
       console.log("Left room with code:", code);
+      this.stopPing();
       this.room = null;
     });
 
@@ -175,10 +185,64 @@ export class Multiplayer {
       console.error("Room error:", code, message);
     });
 
-    this.room.onMessage("*", (type, message) => {
-      console.log("Received message:", type, message);
-      // Handle messages here
+    // Setup ping/pong handler BEFORE the catch-all handler
+    // This ensures the specific handler is registered first
+    this.room.onMessage("pong", (data: any) => {
+      console.log("Received pong:", data);
+      if (!data || typeof data.ts !== "number") {
+        console.warn("Invalid pong message:", data);
+        return;
+      }
+      const serverTime = data.ts;
+      const latency = performance.now() - this.lastPingPerf;
+
+      // Calculate the current time offset
+      // https://en.wikipedia.org/wiki/Network_Time_Protocol#Clock_synchronization_algorithm
+      const timeOffset =
+        (2 * serverTime -
+          Math.round(this.lastPingTime) -
+          Math.round(Date.now())) /
+        2.0;
+
+      // Store the last few time offsets to average them
+      this.lastOffsets.push(timeOffset);
+      if (this.lastOffsets.length > Multiplayer.TIME_OFFSET_SAMPLES) {
+        this.lastOffsets.shift();
+      }
+
+      // Sort the offsets and take the middle one
+      let values = this.lastOffsets.slice().sort();
+      if (values.length > 3) {
+        values = values.slice(1, -1);
+      }
+
+      // Average the remaining offsets
+      const average =
+        values.length > 0
+          ? Math.floor(
+              values.reduce((acc, val) => acc + val, 0) / values.length
+            )
+          : 0;
+
+      // Notify listeners
+      this.emitPingUpdate(latency, average);
+
+      // If we don't have enough samples (at startup), send another ping
+      if (this.lastOffsets.length < Multiplayer.TIME_OFFSET_SAMPLES) {
+        this.sendPing();
+      }
     });
+
+    // Catch-all message handler (after specific handlers)
+    this.room.onMessage("*", (type, message) => {
+      // Skip pong messages as they're handled above
+      if (type !== "pong") {
+        console.log("Received message:", type, message);
+      }
+    });
+
+    // Start ping interval
+    this.startPing();
   }
 
   /**
@@ -189,7 +253,15 @@ export class Multiplayer {
       console.warn("Cannot send message: not connected to a room");
       return;
     }
-    this.room.send(type, message);
+    if (!this.isConnected()) {
+      console.warn("Cannot send message: WebSocket connection is closed");
+      return;
+    }
+    try {
+      this.room.send(type, message);
+    } catch (error) {
+      console.warn("Error sending message:", error);
+    }
   }
 
   /**
@@ -203,8 +275,10 @@ export class Multiplayer {
     sessionId?: string
   ): void {
     if (!this.room) {
-      // You might want to warn here.
       return;
+    }
+    if (!this.isConnected()) {
+      return; // Silently skip if connection is closed
     }
     this.inputPayload.x = x;
     this.inputPayload.y = y;
@@ -217,7 +291,12 @@ export class Multiplayer {
       this.inputPayload.sessionId = this.getSessionId() || "";
     }
     // Send the payload to the server
-    this.room.send("player-input", this.inputPayload);
+    try {
+      this.room.send("player-input", this.inputPayload);
+    } catch (error) {
+      // Silently handle errors when connection is closed
+      // The connection check should prevent this, but catch just in case
+    }
   }
 
   /**
@@ -268,5 +347,76 @@ export class Multiplayer {
   getSessionId(): string | undefined {
     if (this.room && this.room.sessionId) return this.room.sessionId;
     return undefined;
+  }
+
+  /**
+   * Start sending ping messages
+   */
+  private startPing(): void {
+    this.sendPing();
+    this.pingInterval = setInterval(() => this.sendPing(), 3000);
+  }
+
+  /**
+   * Stop sending ping messages
+   */
+  private stopPing(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
+
+  /**
+   * Send a ping message to the server
+   */
+  private sendPing(): void {
+    if (!this.room) return;
+    if (!this.isConnected()) {
+      // Stop ping if connection is closed
+      this.stopPing();
+      return;
+    }
+
+    try {
+      this.lastPingPerf = performance.now();
+      this.lastPingTime = Date.now();
+      console.log("Sending ping:", this.lastPingTime);
+      this.room.send("ping", {
+        ts: this.lastPingTime,
+        type: "ping",
+      });
+    } catch (error) {
+      // Connection closed, stop pinging
+      console.warn("Error sending ping:", error);
+      this.stopPing();
+    }
+  }
+
+  /**
+   * Register a listener for ping updates
+   */
+  onPingUpdate(cb: (latency: number, timeOffset: number) => void): void {
+    this.pingListeners.push(cb);
+  }
+
+  /**
+   * Remove a ping update listener
+   */
+  offPingUpdate(cb: (latency: number, timeOffset: number) => void): void {
+    this.pingListeners = this.pingListeners.filter((fn) => fn !== cb);
+  }
+
+  /**
+   * Emit ping update to all listeners
+   */
+  private emitPingUpdate(latency: number, timeOffset: number): void {
+    for (const listener of this.pingListeners) {
+      try {
+        listener(latency, timeOffset);
+      } catch (e) {
+        console.error("Error in onPingUpdate listener:", e);
+      }
+    }
   }
 }
