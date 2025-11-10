@@ -1,4 +1,5 @@
 import { Container, Text, TextStyle, Graphics } from "pixi.js";
+import { Minimap } from "./Minimap";
 
 export class Ui extends Container {
   private scoreText: Text;
@@ -6,9 +7,13 @@ export class Ui extends Container {
   private backButton: Graphics;
   private backButtonText: Text;
   private buttonContainer: Container;
+  private minimap: Minimap | undefined;
 
   constructor(screenWidth: number, screenHeight: number) {
     super();
+    // Ensure UI is always on top by a very high zIndex
+    this.zIndex = 9999;
+    this.sortableChildren = true; // enable sorting if needed for children (optional)
     this.createUi(screenWidth, screenHeight);
   }
 
@@ -27,7 +32,8 @@ export class Ui extends Container {
     });
     this.scoreText.x = 20;
     this.scoreText.y = 20;
-    this.addChild(this.scoreText);
+    this.scoreText.zIndex = 10;
+    // this.addChild(this.scoreText);
 
     // Level Text
     const levelStyle = new TextStyle({
@@ -44,7 +50,8 @@ export class Ui extends Container {
     this.levelText.anchor.set(0.5);
     this.levelText.x = screenWidth / 2;
     this.levelText.y = 50;
-    this.addChild(this.levelText);
+    this.levelText.zIndex = 10;
+    // this.addChild(this.levelText);
 
     // Back Button
     this.buttonContainer = new Container();
@@ -52,11 +59,13 @@ export class Ui extends Container {
     this.buttonContainer.y = screenHeight - 50;
     this.buttonContainer.eventMode = "static";
     this.buttonContainer.cursor = "pointer";
+    this.buttonContainer.zIndex = 10;
 
     this.backButton = new Graphics();
     this.backButton.roundRect(-60, -20, 120, 40, 8);
     this.backButton.fill(0x666666);
     this.backButton.stroke({ width: 2, color: 0xffffff });
+    this.backButton.zIndex = 1;
 
     const buttonTextStyle = new TextStyle({
       fontFamily: "Arial",
@@ -70,6 +79,7 @@ export class Ui extends Container {
       style: buttonTextStyle,
     });
     this.backButtonText.anchor.set(0.5);
+    this.backButtonText.zIndex = 2;
 
     this.buttonContainer.addChild(this.backButton);
     this.buttonContainer.addChild(this.backButtonText);
@@ -97,6 +107,20 @@ export class Ui extends Container {
 
   setLevel(level: number): void {
     this.levelText.text = `LEVEL ${level}`;
+  }
+
+  setMinimap(minimap: Minimap): void {
+    if (this.minimap) {
+      this.removeChild(this.minimap);
+    }
+    this.minimap = minimap;
+    this.minimap.zIndex = 10;
+    this.addChild(minimap);
+    this.sortChildren(); // Ensure new minimap respects zIndex
+  }
+
+  updateMinimap(): void {
+    this.minimap?.update();
   }
 
   onBack(callback: () => void): void {

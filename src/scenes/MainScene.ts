@@ -5,6 +5,7 @@ import { Scene } from "./Scene";
 import { SceneManager } from "../core/SceneManager";
 import { MenuScene } from "./MenuScene";
 import { Ui } from "./mainScene/Ui";
+import { Minimap } from "./mainScene/Minimap";
 import { PlayerMovement } from "../core/PlayerMovement";
 import { GroundManager } from "../core/GroundManager";
 import { TankFactory } from "../core/TankFactory";
@@ -14,7 +15,9 @@ import tile01Url from "../assets/PNG/PNG/Ground_Tile_01_C.png";
 import tile02Url from "../assets/PNG/PNG/Ground_Tile_02_C.png";
 import tankBody from "../assets/PNG/Hulls_Color_A/Hull_01.png";
 import tankGun from "../assets/PNG/Weapon_Color_A/Gun_01.png";
-
+import { SoundManager } from "@/core/SoundManager";
+import tankMovingSound from "../assets/sounds/tank-moving.mp3";
+import tankRotatingSound from "../assets/sounds/tank-rotating.mp3";
 export class MainScene extends Scene {
   private viewport: Viewport;
   private ui: Ui;
@@ -88,6 +91,17 @@ export class MainScene extends Scene {
     this.viewport.addChild(tankSprites.body);
     this.viewport.addChild(tankSprites.gun);
 
+    // Create minimap
+    const minimap = new Minimap(this.viewport, {
+      width: 200,
+      height: 200,
+      x: screenWidth - 220,
+      y: screenHeight - 220,
+      worldBounds,
+    });
+    minimap.setPlayerSprite(this.tankSprite);
+    this.ui.setMinimap(minimap);
+
     // Add everything to scene
     this.addChild(this.ui);
     this.addChild(this.viewport);
@@ -100,6 +114,31 @@ export class MainScene extends Scene {
       worldBounds
     );
 
+    SoundManager.load("tank-moving", tankMovingSound, {
+      volume: 0.1,
+      loop: true,
+    });
+    SoundManager.load("tank-rotating", tankRotatingSound, {
+      volume: 0.05,
+      loop: true,
+    });
+
+    this.playerMovement.onMoveStateChanged.on((moving) => {
+      if (moving) {
+        SoundManager.play("tank-moving");
+      } else {
+        SoundManager.stop("tank-moving");
+      }
+    });
+
+    this.playerMovement.onRotateStateChanged.on((rotating) => {
+      if (rotating) {
+        SoundManager.play("tank-rotating");
+      } else {
+        SoundManager.stop("tank-rotating");
+      }
+    });
+
     // Make camera follow the player tank
     this.viewport.follow(this.tankSprite, { speed: 0 });
   }
@@ -109,6 +148,7 @@ export class MainScene extends Scene {
     if (this.tankSprite && this.viewport) {
       this.viewport.follow(this.tankSprite, { speed: 0 });
     }
+    this.ui.updateMinimap();
   }
 
   destroy(): void {

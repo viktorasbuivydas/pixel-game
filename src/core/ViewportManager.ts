@@ -20,7 +20,7 @@ export class ViewportManager {
       events: app.renderer.events,
     });
 
-    viewport.drag().pinch().wheel().decelerate();
+    // Disable zoom by not calling clampZoom, wheel, or pinch
 
     if (config.bounds) {
       viewport.clamp({
