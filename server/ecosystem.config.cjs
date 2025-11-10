@@ -12,24 +12,21 @@ module.exports = {
     script: 'lib/index.js',
     time: true,
     watch: false,
-    instances: process.env.INSTANCES || os.cpus().length,
-    exec_mode: process.env.EXEC_MODE || 'fork',
+    instances: os.cpus().length,
+    exec_mode: 'fork',
     wait_ready: true,
-    env: {
-      NODE_ENV: process.env.NODE_ENV || 'development'
-    },
     env_production: {
       NODE_ENV: 'production'
     }
   }],
   deploy : {
     production : {
-      "user" : process.env.DEPLOY_USER || "deploy",
-      "host" : process.env.DEPLOY_HOST ? process.env.DEPLOY_HOST.split(',') : [],
-      "ref"  : process.env.DEPLOY_REF || "origin/main",
-      "repo" : process.env.DEPLOY_REPO || "git@github.com:viktorasbuivydas/pixel-game.git",
-      "path" : process.env.DEPLOY_PATH || "/home/deploy",
-      "post-deploy" : process.env.POST_DEPLOY || "npm install && npm run build && npm run colyseus-post-deploy"
+      "user" : "deploy",
+      "host" : ["70.34.250.153"],
+      "ref"  : "origin/main",
+      "repo" : "git@github.com:viktorasbuivydas/pixel-game.git",
+      "path" : "/home/deploy",
+      "post-deploy" : "npm install && npm run build && npm exec colyseus-post-deploy"
     }
   }
 };
