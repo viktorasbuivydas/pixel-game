@@ -9,7 +9,9 @@ const os = require('os');
 module.exports = {
   apps : [{
     name: "colyseus-app",
-    script: 'build/server/src/index.js',
+    script: 'src/index.ts',
+    interpreter: 'node',
+    interpreterArgs: '--import tsx',
     time: true,
     watch: false,
     instances: os.cpus().length,
