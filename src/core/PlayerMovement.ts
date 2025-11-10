@@ -490,4 +490,32 @@ export class PlayerMovement {
   public getTankMass() {
     return this._tankMassKg;
   }
+
+  /**
+   * Returns the current X position of the tank (body).
+   */
+  public getX(): number {
+    return this.tankSprite.x;
+  }
+
+  /**
+   * Returns the current Y position of the tank (body).
+   */
+  public getY(): number {
+    return this.tankSprite.y;
+  }
+
+  /**
+   * Returns the current rotation of the tank (body) in radians.
+   */
+  public getTankRotation(): number {
+    return this.tankAngle;
+  }
+
+  /**
+   * Returns the current rotation of the tank's gun (turret) in radians.
+   */
+  public getGunRotation(): number {
+    return this.tankGunSprite.rotation;
+  }
 }

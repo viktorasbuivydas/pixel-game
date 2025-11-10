@@ -18,18 +18,27 @@ import tankGun from "../assets/PNG/Weapon_Color_A/Gun_01.png";
 import { SoundManager } from "@/core/SoundManager";
 import tankMovingSound from "../assets/sounds/tank-moving.mp3";
 import tankRotatingSound from "../assets/sounds/tank-rotating.mp3";
+import { Multiplayer } from "../core/Multiplayer";
+import { getStateCallbacks } from "colyseus.js";
+
 export class MainScene extends Scene {
-  private viewport: Viewport;
-  private ui: Ui;
+  private viewport!: Viewport;
+  private ui!: Ui;
   private level: number = 1;
   private playerMovement: PlayerMovement | undefined;
   private tankSprite: Sprite | undefined;
   private tankGunSprite: Sprite | undefined;
+  private multiplayer!: Multiplayer;
+  private playerEntities: { [sessionId: string]: any } = {};
+  private currentSessionId: string | undefined; // <--- Track our own session ID
 
   async initialize(): Promise<void> {
     const app = window.app as PIXI.Application;
     const screenWidth = app.screen.width;
     const screenHeight = app.screen.height;
+
+    // Initialize multiplayer client
+    this.multiplayer = new Multiplayer("http://localhost:2567");
 
     // Create UI
     this.ui = new Ui(screenWidth, screenHeight);
@@ -77,81 +86,163 @@ export class MainScene extends Scene {
       direction: "all",
     });
 
-    // Create tank sprites
-    const tankSprites = await TankFactory.create({
-      bodyTextureUrl: tankBody,
-      gunTextureUrl: tankGun,
-      scale: 0.25,
-      initialX: 100,
-      initialY: 100,
-    });
-
-    this.tankSprite = tankSprites.body;
-    this.tankGunSprite = tankSprites.gun;
-    this.viewport.addChild(tankSprites.body);
-    this.viewport.addChild(tankSprites.gun);
-
-    // Create minimap
-    const minimap = new Minimap(this.viewport, {
-      width: 200,
-      height: 200,
-      x: screenWidth - 220,
-      y: screenHeight - 220,
-      worldBounds,
-    });
-    minimap.setPlayerSprite(this.tankSprite);
-    this.ui.setMinimap(minimap);
-
     // Add everything to scene
     this.addChild(this.ui);
     this.addChild(this.viewport);
 
-    // Initialize player movement with world boundaries
-    this.playerMovement = new PlayerMovement(
-      app,
-      this.tankSprite,
-      this.tankGunSprite,
-      worldBounds
-    );
+    // Example: Join or create a room, and handle players
+    try {
+      const room = await this.multiplayer.joinOrCreate("my_room");
+      console.log(
+        "Connected to room:",
+        (room as any).roomId || (room as any).id
+      );
 
-    SoundManager.load("tank-moving", tankMovingSound, {
-      volume: 0.1,
-      loop: true,
-    });
-    SoundManager.load("tank-rotating", tankRotatingSound, {
-      volume: 0.05,
-      loop: true,
-    });
+      // Store our current session id for correct viewport-follow logic
+      this.currentSessionId = room.sessionId;
 
-    this.playerMovement.onMoveStateChanged.on((moving) => {
-      if (moving) {
-        SoundManager.play("tank-moving");
-      } else {
-        SoundManager.stop("tank-moving");
-      }
-    });
+      const $ = getStateCallbacks(room);
+      // Listen for players being added
+      $(room.state).players.onAdd(async (player, sessionId) => {
+        // Always create a new tank for each player added to the room
+        const entity = await TankFactory.create({
+          bodyTextureUrl: tankBody,
+          gunTextureUrl: tankGun,
+          scale: 0.25,
+          initialX: 100,
+          initialY: 100,
+        });
 
-    this.playerMovement.onRotateStateChanged.on((rotating) => {
-      if (rotating) {
-        SoundManager.play("tank-rotating");
-      } else {
-        SoundManager.stop("tank-rotating");
-      }
-    });
+        // Create minimap for *this* client only, when *our own* entity is created
+        if (sessionId === this.currentSessionId) {
+          const minimap = new Minimap(this.viewport, {
+            width: 200,
+            height: 200,
+            x: screenWidth - 220,
+            y: screenHeight - 220,
+            worldBounds,
+          });
+          minimap.setPlayerSprite(entity.body); // only set our own tank on minimap
+          this.ui.setMinimap(minimap);
+        }
 
-    // Make camera follow the player tank
-    this.viewport.follow(this.tankSprite, { speed: 0 });
+        // Initialize tank position (from server/player if needed)
+        entity.body.x = player.x || 100;
+        entity.body.y = player.y || 100;
+        entity.gun.x = entity.body.x;
+        entity.gun.y = entity.body.y;
+
+        // Store entity
+        this.playerEntities[sessionId] = entity;
+
+        // If this is *us*, update our references
+        if (sessionId === this.currentSessionId) {
+          this.tankSprite = entity.body;
+          this.tankGunSprite = entity.gun;
+
+          // Add player's tank to the viewport (if not already present)
+          if (!this.viewport.children.includes(entity.body)) {
+            this.viewport.addChild(entity.body);
+          }
+          if (!this.viewport.children.includes(entity.gun)) {
+            this.viewport.addChild(entity.gun);
+          }
+
+          // Init player movement for our own tank
+          this.playerMovement = new PlayerMovement(
+            app,
+            this.tankSprite,
+            this.tankGunSprite,
+            worldBounds
+          );
+
+          SoundManager.load("tank-moving", tankMovingSound, {
+            volume: 0.1,
+            loop: true,
+          });
+          SoundManager.load("tank-rotating", tankRotatingSound, {
+            volume: 0.05,
+            loop: true,
+          });
+
+          this.playerMovement.onMoveStateChanged.on((moving) => {
+            if (moving) {
+              SoundManager.play("tank-moving");
+            } else {
+              SoundManager.stop("tank-moving");
+            }
+          });
+
+          this.playerMovement.onRotateStateChanged.on((rotating) => {
+            if (rotating) {
+              SoundManager.play("tank-rotating");
+            } else {
+              SoundManager.stop("tank-rotating");
+            }
+          });
+
+          // Always have camera follow *our* tank (viewport only follows our tank)
+          this.viewport.follow(this.tankSprite, { speed: 0 });
+        } else {
+          // For now, add other players' tanks to viewport but don't control them
+          if (!this.viewport.children.includes(entity.body)) {
+            this.viewport.addChild(entity.body);
+          }
+          if (!this.viewport.children.includes(entity.gun)) {
+            this.viewport.addChild(entity.gun);
+          }
+        }
+      });
+
+      // Access multiplayer state changes via the multiplayer object instead of using $ directly.
+      this.multiplayer.onStateChange((state) => {
+        // console.log("state", state);
+        state.players.forEach((player) => {
+          console.log("player", player);
+
+          const entity =
+            this.playerEntities[this.multiplayer.getClient().sessionId];
+          if (entity) {
+            entity.body.x = player.x;
+            entity.body.y = player.y;
+            entity.gun.x = entity.body.x;
+            entity.gun.y = entity.body.y;
+            console.log("entity", entity.body.x, entity.body.y);
+          }
+        });
+      });
+
+      // You might want more event handling to update others' positions etc.
+    } catch (error) {
+      console.error("Failed to connect to multiplayer room:", error);
+    }
   }
 
   update(deltaTime: number): void {
+    // Only update our own tank's controls/camera
     this.playerMovement?.update(deltaTime);
+
+    // Always keep the camera on our tank if it exists
     if (this.tankSprite && this.viewport) {
       this.viewport.follow(this.tankSprite, { speed: 0 });
     }
-    this.ui.updateMinimap();
+    // Only send input if we're the client, have a tank, and movement controller set up
+    if (this.playerMovement && this.currentSessionId) {
+      this.multiplayer.sendPlayerInput(
+        this.playerMovement.getX(),
+        this.playerMovement.getY(),
+        this.playerMovement.getTankRotation(),
+        this.playerMovement.getGunRotation(),
+        this.currentSessionId
+      );
+    }
+    this.ui?.updateMinimap();
   }
 
   destroy(): void {
+    // Leave multiplayer room before destroying scene
+    this.multiplayer?.leave();
+
     this.ui.destroy();
     this.removeChildren();
     this.viewport?.destroy();
