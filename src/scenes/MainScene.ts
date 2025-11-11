@@ -26,6 +26,7 @@ import { MenuModal } from "./mainScene/MenuModal";
 import { TankHitbox } from "../core/GunManager";
 import { SignInScene } from "./SignInScene";
 import { SceneManager } from "../core/SceneManager";
+import { BotAI } from "../core/BotAI";
 
 export class MainScene extends Scene {
   private viewport!: Viewport;
@@ -51,6 +52,8 @@ export class MainScene extends Scene {
   } | null = null;
   private playerHealth: { [sessionId: string]: number } = {}; // Track health for all players
   private isDead: boolean = false;
+  private bots: Map<string, { ai: BotAI; entity: any }> = new Map(); // Track bots
+  private botCounter: number = 0; // Counter for unique bot IDs
 
   async initialize(): Promise<void> {
     const app = window.app as PIXI.Application;
@@ -200,6 +203,9 @@ export class MainScene extends Scene {
     // Setup mouse click handler for shooting
     this.setupShooting();
 
+    // Spawn bots after world is created
+    await this.spawnBots(screenWidth, screenHeight);
+
     // Example: Join or create a room, and handle players
     try {
       // Join room with username in options
@@ -286,12 +292,17 @@ export class MainScene extends Scene {
           );
         }
 
-        // If enemy dies, destroy their tank
+        // If enemy dies, destroy their tank (player or bot)
         if (
           message.health <= 0 &&
           message.sessionId !== this.currentSessionId
         ) {
-          this.destroyPlayerTank(message.sessionId);
+          // Check if it's a bot
+          if (this.bots.has(message.sessionId)) {
+            this.destroyBot(message.sessionId);
+          } else {
+            this.destroyPlayerTank(message.sessionId);
+          }
         }
 
         // Update UI if it's our health
@@ -578,8 +589,10 @@ export class MainScene extends Scene {
     // Only update our own tank's controls/camera
     this.playerMovement?.update(deltaTime);
 
-    // Collect tank hitboxes for collision detection (only alive players)
+    // Collect tank hitboxes for collision detection (only alive players and bots)
     const tankHitboxes: TankHitbox[] = [];
+
+    // Add player hitboxes
     for (const [sessionId, entity] of Object.entries(this.playerEntities)) {
       if (entity && entity.body) {
         // Only include alive players (health > 0)
@@ -591,6 +604,22 @@ export class MainScene extends Scene {
             width: entity.body.width * entity.body.scale.x,
             height: entity.body.height * entity.body.scale.y,
             sessionId: sessionId,
+          });
+        }
+      }
+    }
+
+    // Add bot hitboxes
+    for (const [botId, botData] of this.bots.entries()) {
+      if (botData.entity && botData.entity.body) {
+        const health = this.playerHealth[botId] || 100;
+        if (health > 0) {
+          tankHitboxes.push({
+            x: botData.entity.body.x,
+            y: botData.entity.body.y,
+            width: botData.entity.body.width * botData.entity.body.scale.x,
+            height: botData.entity.body.height * botData.entity.body.scale.y,
+            sessionId: botId,
           });
         }
       }
@@ -706,6 +735,109 @@ export class MainScene extends Scene {
     }
     this.ui?.updateMinimap();
 
+    // Update bots
+    if (this.worldBounds) {
+      // Collect all player positions for bot AI
+      const playerPositions: Array<{
+        x: number;
+        y: number;
+        sessionId: string;
+      }> = [];
+
+      // Add real players
+      for (const [sessionId, entity] of Object.entries(this.playerEntities)) {
+        if (entity && entity.body) {
+          const health = this.playerHealth[sessionId] || 100;
+          if (health > 0) {
+            playerPositions.push({
+              x: entity.body.x,
+              y: entity.body.y,
+              sessionId: sessionId,
+            });
+          }
+        }
+      }
+
+      // Collect bot positions (for bots to target other bots)
+      const botPositions: Array<{
+        x: number;
+        y: number;
+        sessionId: string;
+        botId: string;
+      }> = [];
+
+      for (const [botId, botData] of this.bots.entries()) {
+        const health = this.playerHealth[botId] || 100;
+        if (health > 0) {
+          const pos = botData.ai.getPosition();
+          botPositions.push({
+            x: pos.x,
+            y: pos.y,
+            sessionId: botId,
+            botId: botId,
+          });
+        }
+      }
+
+      // Update each bot
+      for (const [botId, botData] of this.bots.entries()) {
+        const health = this.playerHealth[botId] || 100;
+        if (health > 0) {
+          botData.ai.update(deltaTime, playerPositions, botPositions);
+
+          // Update bot entity positions
+          const pos = botData.ai.getPosition();
+          botData.entity.body.x = pos.x;
+          botData.entity.body.y = pos.y;
+          botData.entity.body.rotation = botData.ai.getRotation();
+          botData.entity.gun.x = pos.x;
+          botData.entity.gun.y = pos.y;
+          botData.entity.gun.rotation = botData.ai.getGunRotation();
+
+          // Update bot username label and health bar position
+          if (botData.entity.usernameLabel) {
+            const usernameY = pos.y - botData.entity.body.height * 0.5 - 15;
+            botData.entity.usernameLabel.x = pos.x;
+            botData.entity.usernameLabel.y = usernameY;
+
+            // Update health bar
+            if (
+              botData.entity.healthBar &&
+              botData.entity.healthBarBackground
+            ) {
+              const healthBarWidth = 60;
+              const healthBarHeight = 6;
+              const healthBarX = pos.x - healthBarWidth / 2;
+              const healthBarY = usernameY + 12;
+
+              botData.entity.healthBarBackground.clear();
+              botData.entity.healthBarBackground.roundRect(
+                healthBarX,
+                healthBarY,
+                healthBarWidth,
+                healthBarHeight,
+                2
+              );
+              botData.entity.healthBarBackground.fill(0x333333);
+              botData.entity.healthBarBackground.stroke({
+                width: 1,
+                color: 0x000000,
+              });
+
+              TankFactory.updateHealthBar(
+                botData.entity.healthBar,
+                healthBarX,
+                healthBarY,
+                healthBarWidth,
+                healthBarHeight,
+                health
+              );
+            }
+          }
+        }
+      }
+    }
+
     // Update FPS
     const app = window.app as PIXI.Application;
     if (app && app.ticker) {
@@ -788,15 +920,184 @@ export class MainScene extends Scene {
    * Handle bullet hit on a tank
    */
   private handleBulletHit(bullet: any, targetSessionId: string): void {
-    if (!this.currentSessionId || !this.multiplayer) {
+    if (!this.currentSessionId) {
       return;
     }
 
-    // Send damage to server
-    this.multiplayer.send("damage", {
-      targetSessionId: targetSessionId,
-      damage: bullet.damage,
-    });
+    // Check if shooter is a bot
+    const isBotShooter =
+      bullet.ownerSessionId && this.bots.has(bullet.ownerSessionId);
+
+    // Check if target is a bot (client-side damage for bots)
+    if (this.bots.has(targetSessionId)) {
+      // Apply damage directly to bot (client-side)
+      const currentHealth = this.playerHealth[targetSessionId] || 100;
+      const newHealth = Math.max(0, currentHealth - bullet.damage);
+      this.playerHealth[targetSessionId] = newHealth;
+
+      // Update health bar
+      const botData = this.bots.get(targetSessionId);
+      if (
+        botData &&
+        botData.entity &&
+        botData.entity.healthBar &&
+        botData.entity.healthBarBackground
+      ) {
+        const pos = botData.ai.getPosition();
+        const usernameY = pos.y - botData.entity.body.height * 0.5 - 15;
+        const healthBarWidth = 60;
+        const healthBarHeight = 6;
+        const healthBarX = pos.x - healthBarWidth / 2;
+        const healthBarY = usernameY + 12;
+
+        botData.entity.healthBarBackground.clear();
+        botData.entity.healthBarBackground.roundRect(
+          healthBarX,
+          healthBarY,
+          healthBarWidth,
+          healthBarHeight,
+          2
+        );
+        botData.entity.healthBarBackground.fill(0x333333);
+        botData.entity.healthBarBackground.stroke({
+          width: 1,
+          color: 0x000000,
+        });
+
+        TankFactory.updateHealthBar(
+          botData.entity.healthBar,
+          healthBarX,
+          healthBarY,
+          healthBarWidth,
+          healthBarHeight,
+          newHealth
+        );
+      }
+
+      // Destroy bot if health reaches 0
+      if (newHealth <= 0) {
+        this.destroyBot(targetSessionId);
+        // Award kill to shooter if it's a player
+        if (
+          bullet.ownerSessionId &&
+          this.playerKills[bullet.ownerSessionId] !== undefined
+        ) {
+          this.playerKills[bullet.ownerSessionId] =
+            (this.playerKills[bullet.ownerSessionId] || 0) + 1;
+          this.updatePlayersList();
+        }
+      }
+    } else {
+      // Target is a real player
+      if (isBotShooter) {
+        // Bot is shooting at player - apply damage directly (client-side for bot damage)
+        // Since bots are client-side only, we handle their damage client-side
+        const currentHealth = this.playerHealth[targetSessionId] || 100;
+        const newHealth = Math.max(0, currentHealth - bullet.damage);
+        this.playerHealth[targetSessionId] = newHealth;
+
+        // Update health bar if it's our player
+        if (targetSessionId === this.currentSessionId) {
+          this.ui.setHealth(newHealth);
+
+          // Check if player died
+          if (newHealth <= 0 && !this.isDead) {
+            this.handlePlayerDeath();
+          }
+        } else {
+          // Update other player's health bar
+          const entity = this.playerEntities[targetSessionId];
+          if (
+            entity &&
+            entity.healthBar &&
+            entity.healthBarBackground &&
+            entity.body &&
+            entity.usernameLabel
+          ) {
+            const usernameY = entity.body.y - entity.body.height * 0.5 - 15;
+            const healthBarWidth = 60;
+            const healthBarHeight = 6;
+            const healthBarX = entity.body.x - healthBarWidth / 2;
+            const healthBarY = usernameY + 12;
+
+            entity.healthBarBackground.clear();
+            entity.healthBarBackground.roundRect(
+              healthBarX,
+              healthBarY,
+              healthBarWidth,
+              healthBarHeight,
+              2
+            );
+            entity.healthBarBackground.fill(0x333333);
+            entity.healthBarBackground.stroke({ width: 1, color: 0x000000 });
+
+            TankFactory.updateHealthBar(
+              entity.healthBar,
+              healthBarX,
+              healthBarY,
+              healthBarWidth,
+              healthBarHeight,
+              newHealth
+            );
+          }
+        }
+      } else if (this.multiplayer) {
+        // Player is shooting at player - send to server
+        this.multiplayer.send("damage", {
+          targetSessionId: targetSessionId,
+          damage: bullet.damage,
+        });
+      }
+    }
+  }
+
+  /**
+   * Destroy a bot
+   */
+  private destroyBot(botId: string): void {
+    const botData = this.bots.get(botId);
+    if (!botData) {
+      return;
+    }
+
+    const entity = botData.entity;
+
+    // Remove all sprites from viewport
+    if (entity.body && this.viewport.children.includes(entity.body)) {
+      this.viewport.removeChild(entity.body);
+      entity.body.destroy();
+    }
+    if (entity.gun && this.viewport.children.includes(entity.gun)) {
+      this.viewport.removeChild(entity.gun);
+      entity.gun.destroy();
+    }
+    if (
+      entity.usernameLabel &&
+      this.viewport.children.includes(entity.usernameLabel)
+    ) {
+      this.viewport.removeChild(entity.usernameLabel);
+      entity.usernameLabel.destroy();
+    }
+    if (entity.healthBar && this.viewport.children.includes(entity.healthBar)) {
+      this.viewport.removeChild(entity.healthBar);
+      entity.healthBar.destroy();
+    }
+    if (
+      entity.healthBarBackground &&
+      this.viewport.children.includes(entity.healthBarBackground)
+    ) {
+      this.viewport.removeChild(entity.healthBarBackground);
+      entity.healthBarBackground.destroy();
+    }
+
+    // Remove from bots map
+    this.bots.delete(botId);
+    delete this.playerHealth[botId];
+    delete this.playerUsernames[botId];
+    delete this.playerKills[botId];
+
+    // Update players list
+    this.updatePlayersList();
   }
 
   /**
@@ -844,6 +1145,112 @@ export class MainScene extends Scene {
 
     // Update players list
     this.updatePlayersList();
+  }
+
+  /**
+   * Spawn 10 bots randomly across the map
+   */
+  private async spawnBots(
+    _screenWidth: number,
+    _screenHeight: number
+  ): Promise<void> {
+    if (!this.worldBounds) {
+      return;
+    }
+
+    const numBots = 10;
+    const margin = 100; // Margin from edges
+
+    for (let i = 0; i < numBots; i++) {
+      // Generate random position within world bounds
+      const randomX =
+        this.worldBounds.minX +
+        margin +
+        Math.random() *
+          (this.worldBounds.maxX - this.worldBounds.minX - 2 * margin);
+      const randomY =
+        this.worldBounds.minY +
+        margin +
+        Math.random() *
+          (this.worldBounds.maxY - this.worldBounds.minY - 2 * margin);
+
+      // Create bot entity
+      const botId = `bot_${this.botCounter++}`;
+      const botUsername = `Bot ${i + 1}`;
+
+      const entity = await TankFactory.create({
+        bodyTextureUrl: tankBody,
+        gunTextureUrl: tankGun,
+        scale: 0.25,
+        initialX: randomX,
+        initialY: randomY,
+        username: botUsername,
+      });
+
+      // Set initial position
+      entity.body.x = randomX;
+      entity.body.y = randomY;
+      entity.gun.x = randomX;
+      entity.gun.y = randomY;
+
+      // Store bot ID on sprite for self-identification
+      (entity.body as any).botId = botId;
+      (entity.gun as any).botId = botId;
+
+      // Add to viewport
+      this.viewport.addChild(entity.body);
+      this.viewport.addChild(entity.gun);
+      if (entity.usernameLabel) {
+        this.viewport.addChild(entity.usernameLabel);
+      }
+      if (entity.healthBarBackground) {
+        this.viewport.addChild(entity.healthBarBackground);
+      }
+      if (entity.healthBar) {
+        this.viewport.addChild(entity.healthBar);
+      }
+
+      // Create bot AI
+      const botAI = new BotAI({
+        tankBody: entity.body,
+        tankGun: entity.gun,
+        worldBounds: {
+          minX: this.worldBounds.minX,
+          minY: this.worldBounds.minY,
+          maxX: this.worldBounds.maxX,
+          maxY: this.worldBounds.maxY,
+        },
+        moveSpeed: 1.5,
+        rotationSpeed: 0.04,
+        shootRange: 600, // Increased shooting radius
+        shootCooldown: 1500, // 1.5 seconds
+      });
+
+      // Set bot ID for self-identification
+      botAI.setBotId(botId);
+
+      // Set up bot shooting
+      botAI.setOnShoot((x, y, rotation) => {
+        if (this.gunManager) {
+          // Calculate bullet direction
+          const bulletAngle = rotation - Math.PI / 2;
+          const bulletSpeed = 8;
+          const vx = Math.cos(bulletAngle) * bulletSpeed;
+          const vy = Math.sin(bulletAngle) * bulletSpeed;
+
+          // Create bullet for bot
+          this.gunManager.addRemoteBullet(x, y, vx, vy, rotation, botId);
+        }
+      });
+
+      // Store bot
+      this.bots.set(botId, { ai: botAI, entity: entity });
+
+      // Initialize bot health
+      this.playerHealth[botId] = 100;
+      this.playerUsernames[botId] = botUsername;
+      this.playerKills[botId] = 0;
+    }
   }
 
   /**
@@ -911,7 +1318,7 @@ export class MainScene extends Scene {
   }
 
   /**
-   * Update the players list modal with current players
+   * Update the players list modal with current players (including bots)
    */
   private updatePlayersList(): void {
     const players: PlayerInfo[] = Object.keys(this.playerUsernames).map(
