@@ -161,6 +161,11 @@ export class Ui extends Container {
     this.fpsText.text = `FPS: ${Math.round(fps)}`;
   }
 
+  // Health display removed - using health bars above tanks instead
+  setHealth(_health: number): void {
+    // No-op: health is now displayed above tanks
+  }
+
   onBack(callback: () => void): void {
     this.buttonContainer.removeAllListeners("pointerdown");
     this.buttonContainer.on("pointerdown", callback);

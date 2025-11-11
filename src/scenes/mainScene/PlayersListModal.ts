@@ -4,6 +4,7 @@ export interface PlayerInfo {
   sessionId: string;
   username: string;
   isCurrentPlayer: boolean;
+  kills?: number;
 }
 
 export class PlayersListModal extends Container {
@@ -85,8 +86,9 @@ export class PlayersListModal extends Container {
     players.forEach((player, index) => {
       const style = player.isCurrentPlayer ? currentPlayerStyle : playerStyle;
       const prefix = player.isCurrentPlayer ? "► " : "  ";
+      const kills = player.kills !== undefined ? player.kills : 0;
       const playerText = new Text({
-        text: `${prefix}${player.username}`,
+        text: `${prefix}${player.username} - Kills: ${kills}`,
         style: style,
       });
       playerText.x = screenWidth / 2 - 150;

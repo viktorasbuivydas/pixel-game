@@ -9,6 +9,7 @@ export class Player extends Schema {
   @type("number") gunRotation: number;
   @type("number") speed: number;
   @type("number") health: number;
+  @type("number") kills: number = 0;
 }
 
 export class MyRoomState extends Schema {

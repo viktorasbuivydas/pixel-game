@@ -20,6 +20,15 @@ export interface Bullet {
   lifetime: number;
   ownerSessionId: string;
   damage: number;
+  hasHit: boolean; // Track if bullet has already hit something
+}
+
+export interface TankHitbox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  sessionId: string;
 }
 
 export class GunManager {
@@ -27,6 +36,7 @@ export class GunManager {
   private bullets: Bullet[] = [];
   private container: Container;
   private lastShotTime: number = 0;
+  private onHitCallback?: (bullet: Bullet, targetSessionId: string) => void;
 
   // Default gun configuration
   private static readonly DEFAULT_CONFIG: GunConfig = {
@@ -39,9 +49,14 @@ export class GunManager {
     maxAmmo: Infinity, // Unlimited ammo for now
   };
 
-  constructor(container: Container, config?: Partial<GunConfig>) {
+  constructor(
+    container: Container,
+    config?: Partial<GunConfig>,
+    onHit?: (bullet: Bullet, targetSessionId: string) => void
+  ) {
     this.container = container;
     this.config = { ...GunManager.DEFAULT_CONFIG, ...config };
+    this.onHitCallback = onHit;
   }
 
   /**
@@ -119,6 +134,7 @@ export class GunManager {
       lifetime: this.config.bulletLifetime,
       ownerSessionId,
       damage: this.config.damage,
+      hasHit: false,
     };
 
     this.bullets.push(bullet);
@@ -130,16 +146,60 @@ export class GunManager {
    */
   update(
     deltaTime: number,
-    worldBounds?: { minX: number; minY: number; maxX: number; maxY: number }
+    worldBounds?: { minX: number; minY: number; maxX: number; maxY: number },
+    tanks?: TankHitbox[]
   ): void {
     const bulletsToRemove: number[] = [];
 
     this.bullets.forEach((bullet, index) => {
+      // Skip if bullet already hit something
+      if (bullet.hasHit) {
+        bulletsToRemove.push(index);
+        return;
+      }
+
       // Update position
       bullet.x += bullet.vx * deltaTime;
       bullet.y += bullet.vy * deltaTime;
       bullet.sprite.x = bullet.x;
       bullet.sprite.y = bullet.y;
+
+      // Check collision with tanks
+      if (tanks) {
+        for (const tank of tanks) {
+          // Don't hit the owner of the bullet
+          if (tank.sessionId === bullet.ownerSessionId) {
+            continue;
+          }
+
+          // Simple circle-rectangle collision detection
+          const bulletRadius = this.config.bulletSize;
+          const tankLeft = tank.x - tank.width / 2;
+          const tankRight = tank.x + tank.width / 2;
+          const tankTop = tank.y - tank.height / 2;
+          const tankBottom = tank.y + tank.height / 2;
+
+          // Find closest point on rectangle to bullet center
+          const closestX = Math.max(tankLeft, Math.min(bullet.x, tankRight));
+          const closestY = Math.max(tankTop, Math.min(bullet.y, tankBottom));
+
+          // Calculate distance from bullet to closest point
+          const dx = bullet.x - closestX;
+          const dy = bullet.y - closestY;
+          const distanceSquared = dx * dx + dy * dy;
+
+          // Check if bullet collides with tank
+          if (distanceSquared < bulletRadius * bulletRadius) {
+            // Hit detected!
+            bullet.hasHit = true;
+            if (this.onHitCallback) {
+              this.onHitCallback(bullet, tank.sessionId);
+            }
+            bulletsToRemove.push(index);
+            return;
+          }
+        }
+      }
 
       // Decrease lifetime
       bullet.lifetime -= deltaTime;
@@ -230,6 +290,7 @@ export class GunManager {
       lifetime: this.config.bulletLifetime,
       ownerSessionId,
       damage: this.config.damage,
+      hasHit: false,
     };
 
     this.bullets.push(bullet);

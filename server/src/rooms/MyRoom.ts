@@ -44,6 +44,66 @@ export class MyRoom extends Room<MyRoomState> {
       });
     });
 
+    // Handle damage events
+    this.onMessage("damage", (client, message) => {
+      const targetPlayer = this.state.players.get(message.targetSessionId);
+      const attackerPlayer = this.state.players.get(client.sessionId);
+
+      if (targetPlayer && attackerPlayer && targetPlayer.health > 0) {
+        // Don't allow self-damage
+        if (message.targetSessionId === client.sessionId) {
+          return;
+        }
+
+        // Apply damage
+        targetPlayer.health = Math.max(0, targetPlayer.health - message.damage);
+
+        // Check if target was killed
+        if (targetPlayer.health <= 0) {
+          // Increment killer's score
+          attackerPlayer.kills = (attackerPlayer.kills || 0) + 1;
+
+          // Broadcast kill event
+          this.broadcast("kill", {
+            killerSessionId: client.sessionId,
+            victimSessionId: message.targetSessionId,
+            killerKills: attackerPlayer.kills,
+          });
+
+          console.log(
+            `Player ${client.sessionId} killed ${message.targetSessionId}. Total kills: ${attackerPlayer.kills}`
+          );
+        }
+
+        // Broadcast health update to all clients
+        this.broadcast("health-update", {
+          sessionId: message.targetSessionId,
+          health: targetPlayer.health,
+        });
+
+        console.log(
+          `Player ${message.targetSessionId} took ${message.damage} damage. Health: ${targetPlayer.health}`
+        );
+      }
+    });
+
+    // Handle respawn events
+    this.onMessage("respawn", (client, message) => {
+      const player = this.state.players.get(client.sessionId);
+      if (player) {
+        // Reset health to 100
+        player.health = 100;
+
+        // Broadcast health update
+        this.broadcast("health-update", {
+          sessionId: client.sessionId,
+          health: 100,
+        });
+
+        console.log(`Player ${client.sessionId} respawned`);
+      }
+    });
+
     // Handle ping messages and respond with pong
     this.onMessage("ping", (client, message) => {
       console.log("Received ping from", client.sessionId, message);
@@ -69,6 +129,11 @@ export class MyRoom extends Room<MyRoomState> {
     player.sessionId = client.sessionId;
     player.username =
       options?.username || `Player ${client.sessionId.slice(0, 6)}`;
+    player.health = 100; // Initialize health to 100
+    player.rotation = 0;
+    player.gunRotation = 0;
+    player.speed = 0;
+    player.kills = 0; // Initialize kills to 0
 
     // player.x = (Math.random() * mapWidth);
     // player.y = (Math.random() * mapHeight);
