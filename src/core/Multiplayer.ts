@@ -265,6 +265,27 @@ export class Multiplayer {
   }
 
   /**
+   * Send username to the server
+   */
+  sendUsername(username: string, sessionId?: string): void {
+    if (!this.room) {
+      return;
+    }
+    if (!this.isConnected()) {
+      return; // Silently skip if connection is closed
+    }
+    // Send username with sessionId to the server
+    try {
+      this.room.send("set-username", {
+        username: username,
+        sessionId: sessionId || this.getSessionId() || "",
+      });
+    } catch (error) {
+      console.warn("Error sending username:", error);
+    }
+  }
+
+  /**
    * Send player movement input (position/rotation/gunRotation) to the server
    */
   sendPlayerInput(

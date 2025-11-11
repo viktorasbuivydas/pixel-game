@@ -94,8 +94,19 @@ export class MainScene extends Scene {
     this.playersListModal = new PlayersListModal(screenWidth, screenHeight);
     this.addChild(this.playersListModal);
 
-    // Create menu modal
-    this.menuModal = new MenuModal(screenWidth, screenHeight);
+    // Create menu modal with callback to send username updates to server
+    this.menuModal = new MenuModal(
+      screenWidth,
+      screenHeight,
+      (username: string) => {
+        // Update local username
+        this.username = username;
+        // Send username to server
+        if (this.currentSessionId) {
+          this.multiplayer.sendUsername(username, this.currentSessionId);
+        }
+      }
+    );
     this.addChild(this.menuModal);
 
     // Setup Tab key listener for players list
@@ -150,7 +161,10 @@ export class MainScene extends Scene {
 
     // Example: Join or create a room, and handle players
     try {
-      const room = await this.multiplayer.joinOrCreate("my_room");
+      // Join room with username in options
+      const room = await this.multiplayer.joinOrCreate("my_room", {
+        username: this.username,
+      });
       console.log(
         "Connected to room:",
         (room as any).roomId || (room as any).id
@@ -158,6 +172,9 @@ export class MainScene extends Scene {
 
       // Store our current session id for correct viewport-follow logic
       this.currentSessionId = room.sessionId;
+
+      // Send username to server immediately after joining
+      this.multiplayer.sendUsername(this.username, room.sessionId);
 
       // Setup ping listener
       this.multiplayer.onPingUpdate((latency, _timeOffset) => {
@@ -167,11 +184,9 @@ export class MainScene extends Scene {
       const $ = getStateCallbacks(room);
       // Listen for players being added
       $(room.state).players.onAdd(async (player, sessionId) => {
-        // Determine username for this player
+        // Use username from server state, fallback to generated name
         const playerUsername =
-          sessionId === this.currentSessionId
-            ? this.username
-            : `Player ${sessionId.slice(0, 6)}`;
+          player.username || `Player ${sessionId.slice(0, 6)}`;
 
         // Store username for this player
         this.playerUsernames[sessionId] = playerUsername;
@@ -289,6 +304,24 @@ export class MainScene extends Scene {
         this.updatePlayersList();
       });
 
+      // Listen for username changes
+      $(room.state).players.onChange((player, sessionId) => {
+        // Update username if it changed
+        if (
+          player.username &&
+          this.playerUsernames[sessionId] !== player.username
+        ) {
+          this.playerUsernames[sessionId] = player.username;
+          // Update username label if entity exists
+          const entity = this.playerEntities[sessionId];
+          if (entity && entity.usernameLabel) {
+            entity.usernameLabel.text = player.username;
+          }
+          // Update players list
+          this.updatePlayersList();
+        }
+      });
+
       // Access multiplayer state changes via the multiplayer object instead of using $ directly.
       this.multiplayer.onStateChange((state) => {
         // console.log("state", state);
@@ -305,10 +338,18 @@ export class MainScene extends Scene {
             entity.body.rotation = player.rotation;
             // Update gun rotation
             entity.gun.rotation = player.gunRotation;
-            // Update username label position
+            // Update username label position and text if username changed
             if (entity.usernameLabel) {
               entity.usernameLabel.x = player.x;
               entity.usernameLabel.y = player.y - entity.body.height * 0.5 - 15;
+              // Update username text if it changed on server
+              if (
+                player.username &&
+                entity.usernameLabel.text !== player.username
+              ) {
+                entity.usernameLabel.text = player.username;
+                this.playerUsernames[player.sessionId] = player.username;
+              }
             }
             console.log("entity", entity.body.x, entity.body.y);
           }

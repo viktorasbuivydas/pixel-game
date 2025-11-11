@@ -23,6 +23,18 @@ export class MyRoom extends Room<MyRoomState> {
       player.gunRotation = message.gunRotation;
     });
 
+    // Handle username updates
+    this.onMessage("set-username", (client, message) => {
+      const player = this.state.players.get(client.id);
+      if (player && message.username) {
+        player.username = message.username;
+        player.sessionId = client.sessionId;
+        console.log(
+          `Player ${client.sessionId} set username to: ${message.username}`
+        );
+      }
+    });
+
     // Handle ping messages and respond with pong
     this.onMessage("ping", (client, message) => {
       console.log("Received ping from", client.sessionId, message);
@@ -45,6 +57,9 @@ export class MyRoom extends Room<MyRoomState> {
     const player = new Player();
     player.x = 100;
     player.y = 100;
+    player.sessionId = client.sessionId;
+    player.username =
+      options?.username || `Player ${client.sessionId.slice(0, 6)}`;
 
     // player.x = (Math.random() * mapWidth);
     // player.y = (Math.random() * mapHeight);

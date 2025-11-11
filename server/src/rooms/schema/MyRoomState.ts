@@ -4,6 +4,7 @@ export class Player extends Schema {
   @type("number") x: number;
   @type("number") y: number;
   @type("string") sessionId: string;
+  @type("string") username: string = "";
   @type("number") rotation: number;
   @type("number") gunRotation: number;
   @type("number") speed: number;

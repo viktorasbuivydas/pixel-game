@@ -12,11 +12,17 @@ export class MenuModal extends Container {
   private isVisible: boolean = false;
   private screenWidth: number;
   private screenHeight: number;
+  private onUsernameChange?: (username: string) => void;
 
-  constructor(screenWidth: number, screenHeight: number) {
+  constructor(
+    screenWidth: number,
+    screenHeight: number,
+    onUsernameChange?: (username: string) => void
+  ) {
     super();
     this.screenWidth = screenWidth;
     this.screenHeight = screenHeight;
+    this.onUsernameChange = onUsernameChange;
     this.zIndex = 100000; // Very high z-index to be on top
     this.visible = false;
 
@@ -188,6 +194,10 @@ export class MenuModal extends Container {
           if (text) {
             text.text = `Vardas: ${username}`;
           }
+        }
+        // Notify parent (MainScene) to send username to server
+        if (this.onUsernameChange) {
+          this.onUsernameChange(username);
         }
         // Remove prompt
         this.removeChild(usernamePrompt);
