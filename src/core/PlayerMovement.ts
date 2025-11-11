@@ -95,8 +95,8 @@ export class PlayerMovement {
   private mouseScreenPos: { x: number; y: number } = { x: 0, y: 0 };
   private tankAngle: number = 0; // tank's facing angle (in radians)
   private targetTankAngle: number = 0; // target angle for smooth rotation
-  private tankRotateSpeed: number = 0.05; // radians per frame at delta = 1
-  private turretRotateSpeed: number = 0.05; // radians per frame at delta = 1
+  private tankRotateSpeed: number = 0.09; // radians per frame at delta = 1
+  private turretRotateSpeed: number = 0.1; // radians per frame at delta = 1
   private lastGunAngle: number = 0;
   private worldBounds: WorldBounds | null = null;
 
