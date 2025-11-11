@@ -8,7 +8,14 @@ import { SignInScene } from "./src/scenes/SignInScene";
   const app = new Application();
 
   // Initialize the application
-  await app.init({ background: "#111111", resizeTo: window });
+  await app.init({
+    width: 1280,
+    height: 720,
+    resolution: window.devicePixelRatio,
+    autoDensity: true,
+    antialias: true,
+    backgroundColor: 0xffffff,
+  });
   initDevtools({ app });
 
   // Store app globally for SceneManager access
