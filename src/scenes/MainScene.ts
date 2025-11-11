@@ -6,6 +6,7 @@ import { Ui } from "./mainScene/Ui";
 import { Minimap } from "./mainScene/Minimap";
 import { PlayerMovement } from "../core/PlayerMovement";
 import { GroundManager } from "../core/GroundManager";
+import { GunManager } from "../core/GunManager";
 import { TankFactory } from "../core/TankFactory";
 import { ViewportManager } from "../core/ViewportManager";
 // @ts-ignore - Vite handles image imports
@@ -37,6 +38,13 @@ export class MainScene extends Scene {
   private playersListModal!: PlayersListModal;
   private menuModal!: MenuModal;
   private playerUsernames: { [sessionId: string]: string } = {}; // Track usernames for all players
+  private gunManager!: GunManager;
+  private worldBounds: {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+  } | null = null;
 
   async initialize(): Promise<void> {
     const app = window.app as PIXI.Application;
@@ -146,6 +154,23 @@ export class MainScene extends Scene {
 
     const worldBounds = await groundManager.generate();
 
+    // Store world bounds for gun manager
+    this.worldBounds = {
+      minX: worldBounds.minX,
+      minY: worldBounds.minY,
+      maxX: worldBounds.maxX,
+      maxY: worldBounds.maxY,
+    };
+
+    // Initialize gun manager
+    this.gunManager = new GunManager(this.viewport, {
+      damage: 10,
+      fireRate: 2, // 2 shots per second
+      bulletSpeed: 8,
+      bulletLifetime: 300,
+      bulletSize: 4,
+    });
+
     // Set viewport bounds to prevent showing out-of-bounds areas
     this.viewport.clamp({
       left: worldBounds.minX,
@@ -158,6 +183,9 @@ export class MainScene extends Scene {
     // Add everything to scene
     this.addChild(this.ui);
     this.addChild(this.viewport);
+
+    // Setup mouse click handler for shooting
+    this.setupShooting();
 
     // Example: Join or create a room, and handle players
     try {
@@ -179,6 +207,15 @@ export class MainScene extends Scene {
       // Setup ping listener
       this.multiplayer.onPingUpdate((latency, _timeOffset) => {
         this.ui.setPing(latency);
+      });
+
+      // Listen for shooting events from other players
+      room.onMessage("shoot", (message: any) => {
+        if (message.sessionId !== this.currentSessionId && this.gunManager) {
+          // Create bullet for other player's shot
+          // Note: We need to create a bullet object manually since shoot() is for local player
+          this.createRemoteBullet(message);
+        }
       });
 
       const $ = getStateCallbacks(room);
@@ -366,6 +403,11 @@ export class MainScene extends Scene {
     // Only update our own tank's controls/camera
     this.playerMovement?.update(deltaTime);
 
+    // Update gun manager (bullet movement, lifetime, etc.)
+    if (this.gunManager && this.worldBounds) {
+      this.gunManager.update(deltaTime, this.worldBounds);
+    }
+
     // Sync username label position with tank position
     const ourEntity = this.currentSessionId
       ? this.playerEntities[this.currentSessionId]
@@ -398,6 +440,66 @@ export class MainScene extends Scene {
     if (app && app.ticker) {
       this.ui.setFps(app.ticker.FPS);
     }
+  }
+
+  /**
+   * Setup mouse click handler for shooting
+   */
+  private setupShooting(): void {
+    const app = window.app as PIXI.Application;
+
+    app.view.addEventListener("mousedown", (e: MouseEvent) => {
+      // Only shoot on left mouse button
+      if (e.button === 0 && this.tankGunSprite && this.currentSessionId) {
+        this.handleShoot();
+      }
+    });
+  }
+
+  /**
+   * Handle shooting
+   */
+  private handleShoot(): void {
+    if (!this.tankGunSprite || !this.currentSessionId || !this.gunManager) {
+      return;
+    }
+
+    // Shoot bullet from gun position and rotation
+    const bullet = this.gunManager.shoot(
+      this.tankGunSprite.x,
+      this.tankGunSprite.y,
+      this.tankGunSprite.rotation,
+      this.currentSessionId
+    );
+
+    if (bullet) {
+      // Send shooting event to server
+      this.multiplayer.send("shoot", {
+        x: bullet.x,
+        y: bullet.y,
+        vx: bullet.vx,
+        vy: bullet.vy,
+        rotation: bullet.rotation,
+        sessionId: this.currentSessionId,
+      });
+    }
+  }
+
+  /**
+   * Create a bullet for remote player's shot
+   */
+  private createRemoteBullet(message: any): void {
+    if (!this.gunManager) return;
+
+    // Use GunManager's method to add remote bullet
+    this.gunManager.addRemoteBullet(
+      message.x,
+      message.y,
+      message.vx,
+      message.vy,
+      message.rotation,
+      message.sessionId
+    );
   }
 
   private tabKeyHandler = (e: KeyboardEvent) => {
@@ -456,6 +558,9 @@ export class MainScene extends Scene {
     // Remove keyboard listeners
     window.removeEventListener("keydown", this.tabKeyHandler);
     window.removeEventListener("keydown", this.escKeyHandler);
+
+    // Clean up gun manager
+    this.gunManager?.destroy();
 
     this.ui.destroy();
     this.removeChildren();

@@ -35,6 +35,15 @@ export class MyRoom extends Room<MyRoomState> {
       }
     });
 
+    // Handle shooting events - broadcast to all clients
+    this.onMessage("shoot", (client, message) => {
+      // Broadcast the shooting event to all clients in the room
+      this.broadcast("shoot", {
+        ...message,
+        sessionId: client.sessionId,
+      });
+    });
+
     // Handle ping messages and respond with pong
     this.onMessage("ping", (client, message) => {
       console.log("Received ping from", client.sessionId, message);
