@@ -2,8 +2,6 @@ import * as PIXI from "pixi.js";
 import { Sprite } from "pixi.js";
 import { Viewport } from "pixi-viewport";
 import { Scene } from "./Scene";
-import { SceneManager } from "../core/SceneManager";
-import { MenuScene } from "./MenuScene";
 import { Ui } from "./mainScene/Ui";
 import { Minimap } from "./mainScene/Minimap";
 import { PlayerMovement } from "../core/PlayerMovement";
@@ -23,6 +21,7 @@ import { getStateCallbacks } from "colyseus.js";
 import { CookieUtils } from "../core/CookieUtils";
 import { UsernamePrompt } from "../core/UsernamePrompt";
 import { PlayersListModal, PlayerInfo } from "./mainScene/PlayersListModal";
+import { MenuModal } from "./mainScene/MenuModal";
 
 export class MainScene extends Scene {
   private viewport!: Viewport;
@@ -36,6 +35,7 @@ export class MainScene extends Scene {
   private currentSessionId: string | undefined; // <--- Track our own session ID
   private username: string = "";
   private playersListModal!: PlayersListModal;
+  private menuModal!: MenuModal;
   private playerUsernames: { [sessionId: string]: string } = {}; // Track usernames for all players
 
   async initialize(): Promise<void> {
@@ -43,13 +43,13 @@ export class MainScene extends Scene {
     const screenWidth = app.screen.width;
     const screenHeight = app.screen.height;
 
-    // Get username from cookie or prompt for it
+    // Get username from cookie (should be set by SignInScene)
     const savedUsername = CookieUtils.get("username");
     if (savedUsername) {
       this.username = savedUsername;
       await this.initializeGame(app, screenWidth, screenHeight);
     } else {
-      // Show username prompt
+      // Fallback: if no username, show prompt (shouldn't happen normally)
       const usernamePrompt = new UsernamePrompt(
         screenWidth,
         screenHeight,
@@ -58,11 +58,15 @@ export class MainScene extends Scene {
           this.username = username;
           // Save to cookie
           CookieUtils.set("username", username);
-          // Remove prompt
-          this.removeChild(usernamePrompt);
-          usernamePrompt.destroy();
-          // Initialize game
+          // Initialize game first (this adds UI and viewport)
           await this.initializeGame(app, screenWidth, screenHeight);
+          // Small delay to ensure rendering completes
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          // Remove prompt after game is initialized and rendered
+          if (this.children.includes(usernamePrompt)) {
+            this.removeChild(usernamePrompt);
+          }
+          usernamePrompt.destroy();
         }
       );
       this.addChild(usernamePrompt);
@@ -90,14 +94,19 @@ export class MainScene extends Scene {
     this.playersListModal = new PlayersListModal(screenWidth, screenHeight);
     this.addChild(this.playersListModal);
 
+    // Create menu modal
+    this.menuModal = new MenuModal(screenWidth, screenHeight);
+    this.addChild(this.menuModal);
+
     // Setup Tab key listener for players list
     this.setupPlayersListKeyboard();
 
-    // Handle "MENU" button
+    // Setup ESC key listener for menu modal
+    this.setupMenuKeyboard();
+
+    // Handle "MENU" button - toggle menu modal
     this.ui.onBack(() => {
-      const menuScene = new MenuScene();
-      menuScene.initialize();
-      SceneManager.changeScene(menuScene);
+      this.menuModal.toggle();
     });
 
     // Create viewport (will be updated with actual world size after map generation)
@@ -357,11 +366,24 @@ export class MainScene extends Scene {
     }
   };
 
+  private escKeyHandler = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      this.menuModal.hide();
+    }
+  };
+
   /**
    * Setup keyboard listener for Tab key to show/hide players list
    */
   private setupPlayersListKeyboard(): void {
     window.addEventListener("keydown", this.tabKeyHandler);
+  }
+
+  /**
+   * Setup keyboard listener for ESC key to close menu modal
+   */
+  private setupMenuKeyboard(): void {
+    window.addEventListener("keydown", this.escKeyHandler);
   }
 
   /**
@@ -392,6 +414,7 @@ export class MainScene extends Scene {
 
     // Remove keyboard listeners
     window.removeEventListener("keydown", this.tabKeyHandler);
+    window.removeEventListener("keydown", this.escKeyHandler);
 
     this.ui.destroy();
     this.removeChildren();
