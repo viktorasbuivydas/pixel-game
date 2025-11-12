@@ -1,4 +1,4 @@
-import { Sprite, Application, Container, Point } from "pixi.js";
+import { Sprite, Application, Container, Point, Graphics } from "pixi.js";
 import { WorldBounds } from "../types/WorldBounds";
 
 /**
@@ -79,6 +79,7 @@ const AXIS_SWAP_COOLDOWN = 120; // ms, change this as needed
 export class PlayerMovement {
   private tankSprite: Sprite;
   private tankGunSprite: Sprite;
+  private frontArrow: Graphics; // Arrow indicator showing tank front direction
 
   // -- Realistic tank mass (kg) and power (watts) --
   private _tankMassKg: number = 32000; // Example: 32,000 kg (T-90 MBT)
@@ -166,6 +167,47 @@ export class PlayerMovement {
     }
 
     this.computeMovementParameters();
+
+    // Create front arrow indicator
+    this.frontArrow = this.createFrontArrow();
+    // Add arrow to the same parent as the tank sprite
+    if (tankSprite.parent) {
+      tankSprite.parent.addChild(this.frontArrow);
+    } else {
+      // If tank sprite doesn't have a parent yet, add it later
+      // The arrow will be added when the tank is added to the viewport
+    }
+  }
+
+  /**
+   * Create a small arrow graphic pointing forward
+   */
+  private createFrontArrow(): Graphics {
+    const arrow = new Graphics();
+
+    // Draw a small triangle pointing up (forward direction in sprite space)
+    // Arrow size: 8px wide, 12px tall
+    const arrowWidth = 8;
+    const arrowHeight = 12;
+
+    // Draw triangle pointing up
+    arrow.poly([
+      0,
+      -arrowHeight / 2, // Top point (front)
+      -arrowWidth / 2,
+      arrowHeight / 2, // Bottom left
+      arrowWidth / 2,
+      arrowHeight / 2, // Bottom right
+    ]);
+
+    // Fill with bright yellow for visibility
+    arrow.fill(0xffff00);
+    arrow.stroke({ width: 1, color: 0x000000 });
+
+    // Set z-index to be above tank body but below gun
+    arrow.zIndex = 10;
+
+    return arrow;
   }
 
   /**
@@ -220,136 +262,163 @@ export class PlayerMovement {
   }
 
   /**
-   * Returns whether the player is currently moving (WASD).
+   * Returns whether the player is currently moving (W/S for forward/backward).
    */
   public isMoving() {
-    let moveX = 0,
-      moveY = 0;
-    if (PixiInput.isDown("KeyW")) moveY -= 1;
-    if (PixiInput.isDown("KeyS")) moveY += 1;
-    if (PixiInput.isDown("KeyA")) moveX -= 1;
-    if (PixiInput.isDown("KeyD")) moveX += 1;
-    return moveX !== 0 || moveY !== 0;
+    const wDown = PixiInput.isDown("KeyW");
+    const sDown = PixiInput.isDown("KeyS");
+    return wDown || sDown;
   }
 
   // The axis-lock logic used to prevent diagonal is now not required.
   // getCurrentPressedAxis remains for legacy API, but update() no longer uses it.
 
   update(delta: number) {
-    let now = performance.now();
-
     // Gather intended input from keys
     const wDown = PixiInput.isDown("KeyW");
     const sDown = PixiInput.isDown("KeyS");
     const aDown = PixiInput.isDown("KeyA");
     const dDown = PixiInput.isDown("KeyD");
 
-    // Determine movement along both axes: now allow pressing both
-    let moveX = 0;
-    let moveY = 0;
+    // Tank-style differential steering:
+    // W/S = forward/backward movement
+    // A/D = left/right rotation (one track stops, tank rotates)
 
-    if (wDown) moveY -= 1;
-    if (sDown) moveY += 1;
-    if (aDown) moveX -= 1;
-    if (dDown) moveX += 1;
-
-    // No longer restrict to a single axis – both axes can be held!
-
-    // Compute desired direction for tank (normalized, or zero)
-    let moveNormX = 0;
-    let moveNormY = 0;
-    let moving = false;
-
-    if (moveX !== 0 || moveY !== 0) {
-      moving = true;
-      const length = Math.hypot(moveX, moveY);
-      moveNormX = moveX / length;
-      moveNormY = moveY / length;
-
-      // Target angle: upwards on sprite, so add Math.PI/2
-      this.targetTankAngle = Math.atan2(moveNormY, moveNormX) + Math.PI / 2;
-      this.targetTankAngle = clampAngle(this.targetTankAngle);
+    // Determine forward/backward movement direction
+    let forwardDirection = 0; // -1 = backward, 0 = stop, 1 = forward
+    if (wDown && !sDown) {
+      forwardDirection = 1; // Forward
+    } else if (sDown && !wDown) {
+      forwardDirection = -1; // Backward
     }
 
-    // --- Emit movement state event instead of calling SoundManager ---
+    // Determine rotation direction
+    // A = rotate left (left track stops), D = rotate right (right track stops)
+    let rotationDirection = 0; // -1 = rotate left, 0 = no rotation, 1 = rotate right
+    if (aDown && !dDown) {
+      rotationDirection = -1; // Rotate left
+    } else if (dDown && !aDown) {
+      rotationDirection = 1; // Rotate right
+    }
+
+    // Check if tank is moving (forward/backward) or rotating
+    const moving = forwardDirection !== 0;
+    const tankRotating = rotationDirection !== 0;
+
+    // --- Emit movement state event ---
     if (moving !== this.wasMovingLastFrame) {
       this.onMoveStateChanged.emit(moving);
     }
     this.wasMovingLastFrame = moving;
 
-    // Smoothly interpolate tankAngle towards targetTankAngle when moving
+    // --- Handle tank rotation (differential steering) ---
     let rotatedThisFrame = false;
-    if (moveX !== 0 || moveY !== 0) {
-      const t = Math.min(
-        1,
-        this.tankRotateSpeed * this.tankRotationSpeedMultiplier * delta
-      );
-      this.tankAngle = clampAngle(this.tankAngle);
-      this.targetTankAngle = clampAngle(this.targetTankAngle);
+    if (tankRotating) {
+      // Calculate rotation speed based on whether we're also moving
+      // When moving forward/backward while rotating, rotation is slightly slower (more realistic)
+      const rotationSpeedMultiplier = moving ? 0.7 : 1.0;
+      const rotationSpeed =
+        this.tankRotateSpeed *
+        this.tankRotationSpeedMultiplier *
+        rotationSpeedMultiplier *
+        delta;
 
-      this.tankAngle = lerpAngle(this.tankAngle, this.targetTankAngle, t);
+      // Apply rotation
+      this.tankAngle += rotationDirection * rotationSpeed;
       this.tankAngle = clampAngle(this.tankAngle);
 
-      // Only update sprite rotation if changed, for less stutter/precision noise
+      // Update sprite rotation
       if (Math.abs(this.tankSprite.rotation - this.tankAngle) > 1e-4) {
         this.tankSprite.rotation = this.tankAngle;
         rotatedThisFrame = true;
       }
     }
 
-    // -- Handle tank movement: ease in/ease out (acceleration/deceleration) --
-    // Apply forward/backward direction only along tank facing direction
-    let tankForward = 0;
-    if (moveX !== 0 || moveY !== 0) {
-      // Move in input direction, not just facing
-      tankForward = 1;
-    } else {
-      // No key pressed, tank wants to slow to stop
-      tankForward = 0;
-    }
-
+    // --- Handle tank forward/backward movement ---
     // Lerp the current forward value (ease in/out) for smooth accel/brake
     let dt = delta;
-    if (tankForward !== 0) {
-      // Accelerate forward
-      if (this.currentForward < 1) {
-        this.currentForward += (this.acceleration / this.currentMaxSpeed) * dt;
-        this.currentForward = Math.min(this.currentForward, 1);
+    if (forwardDirection !== 0) {
+      // Accelerate in the desired direction
+      const targetForward = forwardDirection;
+      if (Math.sign(this.currentForward) !== targetForward) {
+        // If we're moving in opposite direction, decelerate first, then accelerate
+        if (Math.abs(this.currentForward) > 0.01) {
+          this.currentForward -=
+            (this.deceleration / this.currentMaxSpeed) * dt * 2; // Faster deceleration when reversing
+          if (Math.abs(this.currentForward) < 0.01) {
+            this.currentForward = 0;
+          }
+        } else {
+          // Start accelerating in new direction
+          this.currentForward +=
+            (this.acceleration / this.currentMaxSpeed) * dt * targetForward;
+          this.currentForward = Math.max(-1, Math.min(1, this.currentForward));
+        }
+      } else {
+        // Accelerate in same direction
+        this.currentForward +=
+          (this.acceleration / this.currentMaxSpeed) * dt * targetForward;
+        this.currentForward = Math.max(-1, Math.min(1, this.currentForward));
       }
     } else {
       // Decelerate toward zero
-      if (this.currentForward > 0) {
-        this.currentForward -= (this.deceleration / this.currentMaxSpeed) * dt;
-        if (this.currentForward < 0) this.currentForward = 0;
+      if (Math.abs(this.currentForward) > 0) {
+        const decelAmount = (this.deceleration / this.currentMaxSpeed) * dt;
+        if (this.currentForward > 0) {
+          this.currentForward -= decelAmount;
+          if (this.currentForward < 0) this.currentForward = 0;
+        } else {
+          this.currentForward += decelAmount;
+          if (this.currentForward > 0) this.currentForward = 0;
+        }
       }
     }
 
     // Apply ease-in/ease-out by applying smoothstep to the currentForward
-    const easedForward = smoothstep(this.currentForward);
+    const easedForward =
+      Math.sign(this.currentForward) *
+      smoothstep(Math.abs(this.currentForward));
 
     // Calculate how fast the tank can go (realistically) on screen
     const speedThisFrame =
-      this.currentMaxSpeed * easedForward * this.movementSpeedMultiplier;
+      this.currentMaxSpeed *
+      Math.abs(easedForward) *
+      this.movementSpeedMultiplier;
 
-    // Move tank base along tank facing (not just in input XY--real tank can't sidestep!)
-    if (speedThisFrame > 0.001 && (moveX !== 0 || moveY !== 0)) {
+    // Move tank base along tank facing direction (forward/backward)
+    if (speedThisFrame > 0.001 && Math.abs(this.currentForward) > 0.001) {
       // Move in the direction tank is facing (forwards always in local Y negative)
       // Convert tank angle to direction vector (up in -Y axis)
       const movementAngle = this.tankAngle - Math.PI / 2;
-      const dx = Math.cos(movementAngle) * speedThisFrame * dt;
-      const dy = Math.sin(movementAngle) * speedThisFrame * dt;
+      const dx =
+        Math.cos(movementAngle) *
+        speedThisFrame *
+        dt *
+        Math.sign(this.currentForward);
+      const dy =
+        Math.sin(movementAngle) *
+        speedThisFrame *
+        dt *
+        Math.sign(this.currentForward);
       this.tankSprite.x += dx;
       this.tankSprite.y += dy;
     } else if (
       speedThisFrame > 0.001 &&
-      moveX === 0 &&
-      moveY === 0 &&
-      this.currentForward > 0
+      forwardDirection === 0 &&
+      Math.abs(this.currentForward) > 0.001
     ) {
       // Continue slowing down along last facing until stop
       const movementAngle = this.tankAngle - Math.PI / 2;
-      const dx = Math.cos(movementAngle) * speedThisFrame * dt;
-      const dy = Math.sin(movementAngle) * speedThisFrame * dt;
+      const dx =
+        Math.cos(movementAngle) *
+        speedThisFrame *
+        dt *
+        Math.sign(this.currentForward);
+      const dy =
+        Math.sin(movementAngle) *
+        speedThisFrame *
+        dt *
+        Math.sign(this.currentForward);
       this.tankSprite.x += dx;
       this.tankSprite.y += dy;
     }
@@ -375,6 +444,9 @@ export class PlayerMovement {
     // Move the gun together with the tank base
     this.tankGunSprite.x = this.tankSprite.x;
     this.tankGunSprite.y = this.tankSprite.y;
+
+    // Update front arrow position and rotation
+    this.updateFrontArrow();
 
     // Aim tank's gun at mouse (with correct parent offset)
     const dxGun = mouseWorld.x - this.tankGunSprite.x;
@@ -540,5 +612,34 @@ export class PlayerMovement {
    */
   public getGunRotation(): number {
     return this.tankGunSprite.rotation;
+  }
+
+  /**
+   * Update front arrow position and rotation to match tank
+   */
+  private updateFrontArrow(): void {
+    if (!this.frontArrow) return;
+
+    // Ensure arrow is added to the viewport if tank sprite has a parent
+    if (this.tankSprite.parent && !this.frontArrow.parent) {
+      this.tankSprite.parent.addChild(this.frontArrow);
+    }
+
+    // Calculate offset from tank center to front (along forward direction)
+    // Forward direction in sprite space is -Y (up), so we offset along the tank's forward vector
+    const forwardOffset = this.tankSprite.height * 0.5 + 8; // Half tank height + small offset
+
+    // Convert tank angle to direction vector
+    // Tank angle: 0 = pointing up (in sprite space, which is -Y in world)
+    const movementAngle = this.tankAngle - Math.PI / 2;
+    const offsetX = Math.cos(movementAngle) * forwardOffset;
+    const offsetY = Math.sin(movementAngle) * forwardOffset;
+
+    // Position arrow at front of tank
+    this.frontArrow.x = this.tankSprite.x + offsetX;
+    this.frontArrow.y = this.tankSprite.y + offsetY;
+
+    // Rotate arrow to match tank rotation
+    this.frontArrow.rotation = this.tankAngle;
   }
 }
