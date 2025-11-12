@@ -1,4 +1,4 @@
-import { Room, Client } from "@colyseus/core";
+import { Room, Client, Server } from "@colyseus/core";
 import { MyRoomState, Player } from "./schema/MyRoomState";
 import { TankFactory } from "../../../src/core/TankFactory";
 
@@ -114,6 +114,22 @@ export class MyRoom extends Room<MyRoomState> {
         ts: serverTime,
         type: "pong",
       });
+    });
+
+    // Handle latency simulation updates
+    this.onMessage("set-latency", (client, message) => {
+      const latency = message.latency || 0;
+      // Access the server instance to set latency simulation
+      // Note: This affects all connections, not just this client
+      const server = (this as any).server as Server | undefined;
+      if (server && typeof (server as any).simulateLatency === "function") {
+        (server as any).simulateLatency(latency);
+        console.log(`[Server] Latency simulation updated to: ${latency}ms`);
+      } else {
+        console.warn(
+          "[Server] Cannot set latency: server.simulateLatency not available"
+        );
+      }
     });
   }
 

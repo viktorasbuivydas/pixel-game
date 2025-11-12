@@ -27,6 +27,7 @@ import { TankHitbox } from "../core/GunManager";
 import { SignInScene } from "./SignInScene";
 import { SceneManager } from "../core/SceneManager";
 import { BotAI } from "../core/BotAI";
+import { DebugPanel, DebugSettings } from "./mainScene/DebugPanel";
 
 export class MainScene extends Scene {
   private viewport!: Viewport;
@@ -54,6 +55,15 @@ export class MainScene extends Scene {
   private isDead: boolean = false;
   private bots: Map<string, { ai: BotAI; entity: any }> = new Map(); // Track bots
   private botCounter: number = 0; // Counter for unique bot IDs
+  private debugPanel!: DebugPanel;
+  private debugSettings: DebugSettings = {
+    botsEnabled: true,
+    movementSpeed: 1.0,
+    tankRotationSpeed: 1.0,
+    gunRotationSpeed: 1.0,
+    gunSpeed: 1.0,
+    latency: 0,
+  };
 
   async initialize(): Promise<void> {
     const app = window.app as PIXI.Application;
@@ -132,10 +142,25 @@ export class MainScene extends Scene {
     // Setup ESC key listener for menu modal
     this.setupMenuKeyboard();
 
+    // Setup F1 key listener for debug panel
+    this.setupDebugKeyboard();
+
     // Handle "MENU" button - toggle menu modal
     this.ui.onBack(() => {
       this.menuModal.toggle();
     });
+
+    // Create debug panel
+    this.debugPanel = new DebugPanel(
+      screenWidth,
+      screenHeight,
+      this.debugSettings,
+      (settings) => {
+        this.debugSettings = settings;
+        this.applyDebugSettings();
+      }
+    );
+    this.addChild(this.debugPanel);
 
     // Create viewport (will be updated with actual world size after map generation)
     this.viewport = ViewportManager.create(app, {
@@ -186,6 +211,9 @@ export class MainScene extends Scene {
         this.handleBulletHit(bullet, targetSessionId);
       }
     );
+
+    // Apply initial debug settings
+    this.applyDebugSettings();
 
     // Set viewport bounds to prevent showing out-of-bounds areas
     this.viewport.clamp({
@@ -252,7 +280,9 @@ export class MainScene extends Scene {
 
       // Listen for health updates
       room.onMessage("health-update", (message: any) => {
-        this.playerHealth[message.sessionId] = message.health;
+        // Store the health from server
+        const health = message.health;
+        this.playerHealth[message.sessionId] = health;
 
         // Update health bar for the affected player
         const entity = this.playerEntities[message.sessionId];
@@ -288,7 +318,7 @@ export class MainScene extends Scene {
             healthBarY,
             healthBarWidth,
             healthBarHeight,
-            message.health
+            health
           );
         }
 
@@ -307,7 +337,7 @@ export class MainScene extends Scene {
 
         // Update UI if it's our health
         if (message.sessionId === this.currentSessionId) {
-          this.ui.setHealth(message.health);
+          this.ui.setHealth(health);
 
           // Redirect to sign-in scene if health reaches 0
           if (message.health <= 0 && !this.isDead) {
@@ -783,19 +813,40 @@ export class MainScene extends Scene {
       for (const [botId, botData] of this.bots.entries()) {
         const health = this.playerHealth[botId] || 100;
         if (health > 0) {
-          botData.ai.update(deltaTime, playerPositions, botPositions);
+          // Hide/show bots based on debug settings
+          const shouldBeVisible = this.debugSettings.botsEnabled;
+          botData.entity.body.visible = shouldBeVisible;
+          botData.entity.gun.visible = shouldBeVisible;
+          if (botData.entity.usernameLabel) {
+            botData.entity.usernameLabel.visible = shouldBeVisible;
+          }
+          if (botData.entity.healthBar) {
+            botData.entity.healthBar.visible = shouldBeVisible;
+          }
+          if (botData.entity.healthBarBackground) {
+            botData.entity.healthBarBackground.visible = shouldBeVisible;
+          }
 
-          // Update bot entity positions
-          const pos = botData.ai.getPosition();
-          botData.entity.body.x = pos.x;
-          botData.entity.body.y = pos.y;
-          botData.entity.body.rotation = botData.ai.getRotation();
-          botData.entity.gun.x = pos.x;
-          botData.entity.gun.y = pos.y;
-          botData.entity.gun.rotation = botData.ai.getGunRotation();
+          // Only update bots if they're enabled
+          let pos: { x: number; y: number } | null = null;
+          if (this.debugSettings.botsEnabled) {
+            botData.ai.update(deltaTime, playerPositions, botPositions);
+
+            // Update bot entity positions
+            pos = botData.ai.getPosition();
+            botData.entity.body.x = pos.x;
+            botData.entity.body.y = pos.y;
+            botData.entity.body.rotation = botData.ai.getRotation();
+            botData.entity.gun.x = pos.x;
+            botData.entity.gun.y = pos.y;
+            botData.entity.gun.rotation = botData.ai.getGunRotation();
+          } else {
+            // Get position without updating AI (for UI positioning)
+            pos = botData.ai.getPosition();
+          }
 
           // Update bot username label and health bar position
-          if (botData.entity.usernameLabel) {
+          if (botData.entity.usernameLabel && pos) {
             const usernameY = pos.y - botData.entity.body.height * 0.5 - 15;
             botData.entity.usernameLabel.x = pos.x;
             botData.entity.usernameLabel.y = usernameY;
@@ -1315,6 +1366,53 @@ export class MainScene extends Scene {
    */
   private setupMenuKeyboard(): void {
     window.addEventListener("keydown", this.escKeyHandler);
+  }
+
+  private f1KeyHandler = (e: KeyboardEvent) => {
+    if (e.key === "Shift") {
+      e.preventDefault(); // Prevent default Shift behavior, if any
+      this.debugPanel.toggle();
+    }
+  };
+
+  /**
+   * Setup keyboard listener for F1 key to toggle debug panel
+   */
+  private setupDebugKeyboard(): void {
+    window.addEventListener("keydown", this.f1KeyHandler);
+  }
+
+  /**
+   * Apply debug settings to game systems
+   */
+  private applyDebugSettings(): void {
+    // Apply movement speed multiplier
+    if (this.playerMovement) {
+      this.playerMovement.setMovementSpeedMultiplier(
+        this.debugSettings.movementSpeed
+      );
+      this.playerMovement.setTankRotationSpeedMultiplier(
+        this.debugSettings.tankRotationSpeed
+      );
+      this.playerMovement.setGunRotationSpeedMultiplier(
+        this.debugSettings.gunRotationSpeed
+      );
+    }
+
+    // Apply gun speed multiplier
+    if (this.gunManager) {
+      this.gunManager.setBulletSpeedMultiplier(this.debugSettings.gunSpeed);
+    }
+
+    // Send latency update to server
+    if (this.multiplayer) {
+      const room = this.multiplayer.getRoom();
+      if (room) {
+        room.send("set-latency", {
+          latency: this.debugSettings.latency,
+        });
+      }
+    }
   }
 
   /**

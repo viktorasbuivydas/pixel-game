@@ -15,6 +15,18 @@ export default config({
      * Define your room handlers:
      */
     gameServer.define("my_room", MyRoom);
+
+    /**
+     * Simulate latency for testing (in milliseconds)
+     * Set SIMULATE_LATENCY environment variable to enable (e.g., SIMULATE_LATENCY=200)
+     */
+    const simulateLatency = process.env.SIMULATE_LATENCY
+      ? parseInt(process.env.SIMULATE_LATENCY, 10)
+      : 0;
+    if (simulateLatency > 0) {
+      gameServer.simulateLatency(simulateLatency);
+      console.log(`[Server] Latency simulation enabled: ${simulateLatency}ms`);
+    }
   },
 
   initializeExpress: (app) => {

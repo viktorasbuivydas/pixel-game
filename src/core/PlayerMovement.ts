@@ -100,6 +100,11 @@ export class PlayerMovement {
   private lastGunAngle: number = 0;
   private worldBounds: WorldBounds | null = null;
 
+  // Debug multipliers
+  private movementSpeedMultiplier: number = 1.0;
+  private tankRotationSpeedMultiplier: number = 1.0;
+  private gunRotationSpeedMultiplier: number = 1.0;
+
   private wasMovingLastFrame: boolean = false;
   private lastSpriteRotation: number = 0;
 
@@ -275,7 +280,10 @@ export class PlayerMovement {
     // Smoothly interpolate tankAngle towards targetTankAngle when moving
     let rotatedThisFrame = false;
     if (moveX !== 0 || moveY !== 0) {
-      const t = Math.min(1, this.tankRotateSpeed * delta);
+      const t = Math.min(
+        1,
+        this.tankRotateSpeed * this.tankRotationSpeedMultiplier * delta
+      );
       this.tankAngle = clampAngle(this.tankAngle);
       this.targetTankAngle = clampAngle(this.targetTankAngle);
 
@@ -320,7 +328,8 @@ export class PlayerMovement {
     const easedForward = smoothstep(this.currentForward);
 
     // Calculate how fast the tank can go (realistically) on screen
-    const speedThisFrame = this.currentMaxSpeed * easedForward;
+    const speedThisFrame =
+      this.currentMaxSpeed * easedForward * this.movementSpeedMultiplier;
 
     // Move tank base along tank facing (not just in input XY--real tank can't sidestep!)
     if (speedThisFrame > 0.001 && (moveX !== 0 || moveY !== 0)) {
@@ -386,7 +395,8 @@ export class PlayerMovement {
 
     if (Math.abs(gunDiff) > 1e-4) {
       // Turret rotation ratio for this frame
-      let maxStep = this.turretRotateSpeed * delta;
+      let maxStep =
+        this.turretRotateSpeed * this.gunRotationSpeedMultiplier * delta;
       if (Math.abs(gunDiff) < maxStep) {
         // Snap to final
         this.tankGunSprite.rotation = gunTarget;
@@ -443,6 +453,19 @@ export class PlayerMovement {
   }
   public getTurretRotateSpeed() {
     return this.turretRotateSpeed;
+  }
+
+  // Debug multiplier setters
+  public setMovementSpeedMultiplier(multiplier: number): void {
+    this.movementSpeedMultiplier = Math.max(0.1, multiplier);
+  }
+
+  public setTankRotationSpeedMultiplier(multiplier: number): void {
+    this.tankRotationSpeedMultiplier = Math.max(0.1, multiplier);
+  }
+
+  public setGunRotationSpeedMultiplier(multiplier: number): void {
+    this.gunRotationSpeedMultiplier = Math.max(0.1, multiplier);
   }
 
   // -- Realistic mass/power setters and getters --

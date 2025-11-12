@@ -37,6 +37,7 @@ export class GunManager {
   private container: Container;
   private lastShotTime: number = 0;
   private onHitCallback?: (bullet: Bullet, targetSessionId: string) => void;
+  private bulletSpeedMultiplier: number = 1.0;
 
   // Default gun configuration
   private static readonly DEFAULT_CONFIG: GunConfig = {
@@ -74,6 +75,13 @@ export class GunManager {
   }
 
   /**
+   * Set bullet speed multiplier (for debug/testing)
+   */
+  setBulletSpeedMultiplier(multiplier: number): void {
+    this.bulletSpeedMultiplier = Math.max(0.1, multiplier);
+  }
+
+  /**
    * Check if player can shoot (fire rate cooldown)
    */
   canFire(): boolean {
@@ -101,8 +109,9 @@ export class GunManager {
     // Calculate bullet direction from gun rotation
     // Gun rotation is in radians, with 0 pointing up (in PixiJS)
     const bulletAngle = gunRotation - Math.PI / 2; // Convert to standard angle
-    const vx = Math.cos(bulletAngle) * this.config.bulletSpeed;
-    const vy = Math.sin(bulletAngle) * this.config.bulletSpeed;
+    const bulletSpeed = this.config.bulletSpeed * this.bulletSpeedMultiplier;
+    const vx = Math.cos(bulletAngle) * bulletSpeed;
+    const vy = Math.sin(bulletAngle) * bulletSpeed;
 
     // Create bullet sprite (simple circle for now)
     const bulletSprite = new Graphics();
