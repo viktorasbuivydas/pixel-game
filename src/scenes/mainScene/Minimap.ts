@@ -11,6 +11,7 @@ export interface MinimapConfig {
   borderColor?: number;
   playerColor?: number;
   viewportColor?: number;
+  backgroundAlpha?: number; // <-- Add optional opacity (alpha) property
 }
 
 export class Minimap extends Container {
@@ -32,6 +33,7 @@ export class Minimap extends Container {
       borderColor: 0xffffff,
       playerColor: 0x00ff00,
       viewportColor: 0xffff00,
+      backgroundAlpha: 0.4, // <-- Default minimap background opacity
       ...config,
     };
 
@@ -52,7 +54,10 @@ export class Minimap extends Container {
     // Background
     this.background = new Graphics();
     this.background.roundRect(0, 0, this.config.width, this.config.height, 4);
+
+    // Use .alpha to control opacity if using PixiJS's Graphics
     this.background.fill(this.config.backgroundColor!);
+    this.background.alpha = this.config.backgroundAlpha ?? 0.6; // <-- Set opacity
     this.addChild(this.background);
 
     // Border

@@ -8,6 +8,8 @@ import { PlayerMovement } from "../core/PlayerMovement";
 import { GroundManager } from "../core/GroundManager";
 import { GunManager } from "../core/GunManager";
 import { TankFactory } from "../core/TankFactory";
+import { Tank1 } from "../core/tanks/Tank1";
+import { TankSelection } from "./TankSelectionScene";
 import { ViewportManager } from "../core/ViewportManager";
 // @ts-ignore - Vite handles image imports
 import tile01Url from "../assets/PNG/PNG/Ground_Tile_01_C.png";
@@ -30,6 +32,7 @@ import { BotAI } from "../core/BotAI";
 import { DebugPanel, DebugSettings } from "./mainScene/DebugPanel";
 
 export class MainScene extends Scene {
+  public tankSelection?: TankSelection; // Selection passed from TankSelectionScene
   private viewport!: Viewport;
   private ui!: Ui;
   private level: number = 1;
@@ -242,9 +245,13 @@ export class MainScene extends Scene {
       direction: "all",
     });
 
-    // Add everything to scene
-    this.addChild(this.ui);
+    // Add viewport to scene (game world)
     this.addChild(this.viewport);
+
+    // Add UI to app stage directly (separate from game canvas)
+    // This ensures UI is always on top and separate from the viewport
+    const pixiApp = window.app as PIXI.Application;
+    pixiApp.stage.addChild(this.ui);
 
     // Setup mouse click handler for shooting
     this.setupShooting();
@@ -287,6 +294,11 @@ export class MainScene extends Scene {
       room.onMessage("kill", (message: any) => {
         // Update killer's kill count
         this.playerKills[message.killerSessionId] = message.killerKills || 0;
+
+        // Update UI if it's our kill
+        if (message.killerSessionId === this.currentSessionId) {
+          this.ui.setKills(message.killerKills || 0);
+        }
 
         // Update players list to show new kill count
         this.updatePlayersList();
@@ -383,17 +395,80 @@ export class MainScene extends Scene {
         // Update UI if it's our player
         if (sessionId === this.currentSessionId) {
           this.ui.setHealth(player.health || 100);
+          this.ui.setKills(player.kills || 0);
         }
 
-        // Always create a new tank for each player added to the room
-        const entity = await TankFactory.create({
-          bodyTextureUrl: tankBody,
-          gunTextureUrl: tankGun,
-          scale: 0.25,
-          initialX: 100,
-          initialY: 100,
-          username: playerUsername,
-        });
+        // Create tank - use Tank1 for current player, TankFactory for others
+        let entity: any;
+
+        if (sessionId === this.currentSessionId) {
+          // Get tank selection from cookie or passed property
+          let selection: TankSelection | null = null;
+          if (this.tankSelection) {
+            selection = this.tankSelection;
+          } else {
+            const selectionJson = CookieUtils.get("tankSelection");
+            if (selectionJson) {
+              try {
+                selection = JSON.parse(selectionJson);
+              } catch (e) {
+                console.error("Failed to parse tank selection:", e);
+              }
+            }
+          }
+
+          // Default selection if none found
+          if (!selection) {
+            selection = { colorIndex: 1, baseIndex: 1, gunIndex: 1 };
+          }
+
+          // Create tank using Tank1 with selected configuration
+          const baseId = `tank${selection.baseIndex}_color${selection.colorIndex}`;
+          const gunId = `cannon${selection.gunIndex}_color${selection.colorIndex}`;
+
+          const tank1Entity = await Tank1.create({
+            baseId: baseId,
+            gunId: gunId,
+            initialX: player.x || 100,
+            initialY: player.y || 100,
+            scale: 0.25,
+            username: playerUsername,
+          });
+
+          // Get gun stats and update GunManager
+          const gunStats = Tank1.getGunStats(tank1Entity);
+          this.gunManager.updateConfig({
+            damage: gunStats.damage,
+            fireRate: gunStats.fireRate,
+            bulletSpeed: 8 * gunStats.bulletSpeed, // Base speed * multiplier
+            bulletLifetime: Math.floor(
+              gunStats.range / (8 * gunStats.bulletSpeed)
+            ), // Calculate lifetime from range
+          });
+
+          // Convert Tank1 format to match TankFactory format for compatibility
+          entity = {
+            body: tank1Entity.base.base,
+            gun: tank1Entity.gun.gun,
+            container: tank1Entity.container,
+            usernameLabel: tank1Entity.usernameLabel,
+            healthBar: tank1Entity.healthBar,
+            healthBarBackground: tank1Entity.healthBarBackground,
+          };
+
+          // Store Tank1 entity for later use
+          (entity as any).tank1Entity = tank1Entity;
+        } else {
+          // Use TankFactory for other players
+          entity = await TankFactory.create({
+            bodyTextureUrl: tankBody,
+            gunTextureUrl: tankGun,
+            scale: 0.25,
+            initialX: player.x || 100,
+            initialY: player.y || 100,
+            username: playerUsername,
+          });
+        }
 
         // Create minimap for *this* client only, when *our own* entity is created
         if (sessionId === this.currentSessionId) {
@@ -424,39 +499,50 @@ export class MainScene extends Scene {
           this.tankGunSprite = entity.gun;
 
           // Add player's tank to the viewport
-          if (!this.viewport.children.includes(entity.body)) {
-            this.viewport.addChild(entity.body);
-          }
-          if (!this.viewport.children.includes(entity.gun)) {
-            this.viewport.addChild(entity.gun);
-          }
-          if (
-            entity.usernameLabel &&
-            !this.viewport.children.includes(entity.usernameLabel)
-          ) {
-            this.viewport.addChild(entity.usernameLabel);
-          }
-          // Add health bars for our own tank
-          if (
-            entity.healthBarBackground &&
-            !this.viewport.children.includes(entity.healthBarBackground)
-          ) {
-            this.viewport.addChild(entity.healthBarBackground);
-          }
-          if (
-            entity.healthBar &&
-            !this.viewport.children.includes(entity.healthBar)
-          ) {
-            this.viewport.addChild(entity.healthBar);
+          // For Tank1, add the container; for TankFactory, add individual sprites
+          if ((entity as any).tank1Entity) {
+            // Tank1 uses a container structure
+            if (!this.viewport.children.includes(entity.container)) {
+              this.viewport.addChild(entity.container);
+            }
+          } else {
+            // TankFactory uses individual sprites
+            if (!this.viewport.children.includes(entity.body)) {
+              this.viewport.addChild(entity.body);
+            }
+            if (!this.viewport.children.includes(entity.gun)) {
+              this.viewport.addChild(entity.gun);
+            }
+            if (
+              entity.usernameLabel &&
+              !this.viewport.children.includes(entity.usernameLabel)
+            ) {
+              this.viewport.addChild(entity.usernameLabel);
+            }
+            // Add health bars for our own tank
+            if (
+              entity.healthBarBackground &&
+              !this.viewport.children.includes(entity.healthBarBackground)
+            ) {
+              this.viewport.addChild(entity.healthBarBackground);
+            }
+            if (
+              entity.healthBar &&
+              !this.viewport.children.includes(entity.healthBar)
+            ) {
+              this.viewport.addChild(entity.healthBar);
+            }
           }
 
           // Init player movement for our own tank
-          this.playerMovement = new PlayerMovement(
-            app,
-            this.tankSprite,
-            this.tankGunSprite,
-            worldBounds
-          );
+          if (this.tankSprite && this.tankGunSprite) {
+            this.playerMovement = new PlayerMovement(
+              app,
+              this.tankSprite,
+              this.tankGunSprite,
+              worldBounds
+            );
+          }
 
           SoundManager.load("tank-moving", tankMovingSound, {
             volume: 0.1,
@@ -467,24 +553,25 @@ export class MainScene extends Scene {
             loop: true,
           });
 
-          this.playerMovement.onMoveStateChanged.on((moving) => {
-            if (moving) {
-              SoundManager.play("tank-moving");
-            } else {
-              SoundManager.stop("tank-moving");
-            }
-          });
+          if (this.playerMovement) {
+            this.playerMovement.onMoveStateChanged.on((moving) => {
+              if (moving) {
+                SoundManager.play("tank-moving");
+              } else {
+                SoundManager.stop("tank-moving");
+              }
+            });
 
-          this.playerMovement.onRotateStateChanged.on((rotating) => {
-            if (rotating) {
-              SoundManager.play("tank-rotating");
-            } else {
-              SoundManager.stop("tank-rotating");
-            }
-          });
+            this.playerMovement.onRotateStateChanged.on((rotating) => {
+              if (rotating) {
+                SoundManager.play("tank-rotating");
+              } else {
+                SoundManager.stop("tank-rotating");
+              }
+            });
+          }
 
-          // Always have camera follow *our* tank (viewport only follows our tank)
-          this.viewport.follow(entity.body, { speed: 0 });
+          // Camera following will be handled manually in update() for better control
         } else {
           // Add other players' tanks to viewport
           if (!this.viewport.children.includes(entity.body)) {
@@ -651,6 +738,10 @@ export class MainScene extends Scene {
                 this.playerKills[player.sessionId] !== player.kills
               ) {
                 this.playerKills[player.sessionId] = player.kills;
+                // Update UI if it's our player
+                if (player.sessionId === this.currentSessionId) {
+                  this.ui.setKills(player.kills);
+                }
                 // Update players list if kills changed
                 this.updatePlayersList();
               }
@@ -1080,6 +1171,14 @@ export class MainScene extends Scene {
     );
 
     if (bullet) {
+      // Play fire animation if using Tank1
+      const ourEntity = this.currentSessionId
+        ? this.playerEntities[this.currentSessionId]
+        : null;
+      if (ourEntity && (ourEntity as any).tank1Entity) {
+        Tank1.playFireAnimation((ourEntity as any).tank1Entity);
+      }
+
       // Send shooting event to server
       this.multiplayer.send("shoot", {
         x: bullet.x,
@@ -1177,6 +1276,10 @@ export class MainScene extends Scene {
         ) {
           this.playerKills[bullet.ownerSessionId] =
             (this.playerKills[bullet.ownerSessionId] || 0) + 1;
+          // Update UI if it's our kill
+          if (bullet.ownerSessionId === this.currentSessionId) {
+            this.ui.setKills(this.playerKills[bullet.ownerSessionId]);
+          }
           this.updatePlayersList();
         }
       }
@@ -1600,7 +1703,12 @@ export class MainScene extends Scene {
     // Clean up gun manager
     this.gunManager?.destroy();
 
-    this.ui.destroy();
+    // Remove UI from app stage (it was added separately)
+    const pixiApp = window.app as PIXI.Application;
+    if (this.ui && pixiApp.stage.children.includes(this.ui)) {
+      pixiApp.stage.removeChild(this.ui);
+    }
+    this.ui?.destroy();
     this.removeChildren();
     this.viewport?.destroy();
   }

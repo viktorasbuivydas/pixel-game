@@ -1,7 +1,7 @@
 import { Container, Graphics, Text, TextStyle } from "pixi.js";
 import { Scene } from "./Scene";
 import { SceneManager } from "../core/SceneManager";
-import { MainScene } from "./MainScene";
+import { TankSelectionScene } from "./TankSelectionScene";
 import { CookieUtils } from "../core/CookieUtils";
 
 export class SignInScene extends Scene {
@@ -180,10 +180,10 @@ export class SignInScene extends Scene {
       document.body.removeChild(this.inputElement);
     }
 
-    // Transition to MainScene
-    const mainScene = new MainScene();
-    mainScene.initialize();
-    SceneManager.changeScene(mainScene);
+    // Transition to TankSelectionScene
+    const selectionScene = new TankSelectionScene();
+    selectionScene.initialize();
+    SceneManager.changeScene(selectionScene);
   }
 
   update(_deltaTime: number): void {

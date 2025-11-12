@@ -2,6 +2,10 @@ import { Application } from "pixi.js";
 import { initDevtools } from "@pixi/devtools";
 import { SceneManager } from "./src/core/SceneManager";
 import { SignInScene } from "./src/scenes/SignInScene";
+import { initializeTankRegistry } from "./src/core/tanks/TankRegistry";
+
+// Initialize tank registry at startup
+initializeTankRegistry();
 
 (async (): Promise<void> => {
   // Create a new application
