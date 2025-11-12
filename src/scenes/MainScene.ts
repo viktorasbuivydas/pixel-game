@@ -56,6 +56,24 @@ export class MainScene extends Scene {
   private bots: Map<string, { ai: BotAI; entity: any }> = new Map(); // Track bots
   private botCounter: number = 0; // Counter for unique bot IDs
   private debugPanel!: DebugPanel;
+
+  // Interpolation data for other players
+  private playerInterpolation: Map<
+    string,
+    {
+      fromX: number;
+      fromY: number;
+      fromRotation: number;
+      fromGunRotation: number;
+      toX: number;
+      toY: number;
+      toRotation: number;
+      toGunRotation: number;
+      startTime: number;
+      duration: number; // Interpolation duration in ms
+    }
+  > = new Map();
+
   private debugSettings: DebugSettings = {
     botsEnabled: true,
     movementSpeed: 1.0,
@@ -531,19 +549,92 @@ export class MainScene extends Scene {
           console.log("state player", player);
           const entity = this.playerEntities[player.sessionId];
           if (entity) {
-            // Update sprite positions
-            entity.body.x = player.x;
-            entity.body.y = player.y;
-            entity.gun.x = player.x;
-            entity.gun.y = player.y;
-            // Update body rotation
-            entity.body.rotation = player.rotation;
-            // Update gun rotation
-            entity.gun.rotation = player.gunRotation;
+            const isCurrentPlayer = player.sessionId === this.currentSessionId;
+
+            if (isCurrentPlayer) {
+              // CLIENT-SIDE PREDICTION: For current player, reconcile with server
+              // Check if prediction is too far off (reconciliation threshold)
+              if (this.tankSprite && this.tankGunSprite) {
+                const predictionError = Math.hypot(
+                  this.tankSprite.x - player.x,
+                  this.tankSprite.y - player.y
+                );
+
+                // If error is too large (> 50 pixels), snap to server position
+                // Otherwise, smoothly correct (lerp towards server position)
+                const reconciliationThreshold = 50;
+                if (predictionError > reconciliationThreshold) {
+                  // Snap to server position if too far off
+                  this.tankSprite.x = player.x;
+                  this.tankSprite.y = player.y;
+                  this.tankGunSprite.x = player.x;
+                  this.tankGunSprite.y = player.y;
+                  if (this.playerMovement) {
+                    (this.playerMovement as any).tankAngle = player.rotation;
+                    (this.playerMovement as any).tankGunSprite.rotation =
+                      player.gunRotation;
+                  }
+                } else if (predictionError > 5) {
+                  // Smooth correction for small errors
+                  const correctionFactor = 0.2; // 20% correction per frame
+                  this.tankSprite.x +=
+                    (player.x - this.tankSprite.x) * correctionFactor;
+                  this.tankSprite.y +=
+                    (player.y - this.tankSprite.y) * correctionFactor;
+                  this.tankGunSprite.x = this.tankSprite.x;
+                  this.tankGunSprite.y = this.tankSprite.y;
+                }
+                // For very small errors (< 5px), don't correct to avoid jitter
+              }
+            } else {
+              // INTERPOLATION: For other players, use linear interpolation
+              const interpolationData = this.playerInterpolation.get(
+                player.sessionId
+              );
+              const now = performance.now();
+
+              // Check if we need to start a new interpolation
+              if (
+                !interpolationData ||
+                interpolationData.toX !== player.x ||
+                interpolationData.toY !== player.y ||
+                interpolationData.toRotation !== player.rotation ||
+                interpolationData.toGunRotation !== player.gunRotation
+              ) {
+                // Start new interpolation
+                const currentX = entity.body.x || player.x;
+                const currentY = entity.body.y || player.y;
+                const currentRotation = entity.body.rotation || player.rotation;
+                const currentGunRotation =
+                  entity.gun.rotation || player.gunRotation;
+
+                this.playerInterpolation.set(player.sessionId, {
+                  fromX: currentX,
+                  fromY: currentY,
+                  fromRotation: currentRotation,
+                  fromGunRotation: currentGunRotation,
+                  toX: player.x,
+                  toY: player.y,
+                  toRotation: player.rotation,
+                  toGunRotation: player.gunRotation,
+                  startTime: now,
+                  duration: 100, // Interpolate over 100ms (adjust based on server update rate)
+                });
+              }
+
+              // The actual interpolation happens in the update loop for smooth frame-by-frame updates
+            }
+
             // Update username label position and text if username changed
-            if (entity.usernameLabel) {
-              const usernameY = player.y - entity.body.height * 0.5 - 15;
-              entity.usernameLabel.x = player.x;
+            // For current player, use predicted position; for others, interpolation handles it in update loop
+            if (entity.usernameLabel && isCurrentPlayer) {
+              const usernameY =
+                (isCurrentPlayer ? this.tankSprite?.y : entity.body.y) -
+                entity.body.height * 0.5 -
+                15;
+              entity.usernameLabel.x = isCurrentPlayer
+                ? this.tankSprite?.x || player.x
+                : entity.body.x;
               entity.usernameLabel.y = usernameY;
               // Update username text if it changed on server
               if (
@@ -568,7 +659,11 @@ export class MainScene extends Scene {
               if (entity.healthBar && entity.healthBarBackground) {
                 const healthBarWidth = 60;
                 const healthBarHeight = 6;
-                const healthBarX = player.x - healthBarWidth / 2;
+                // Use predicted position for current player, server position for others
+                const currentX = isCurrentPlayer
+                  ? this.tankSprite?.x || player.x
+                  : player.x;
+                const healthBarX = currentX - healthBarWidth / 2;
                 const healthBarY = usernameY + 12;
 
                 // Update background position
@@ -616,8 +711,55 @@ export class MainScene extends Scene {
       return;
     }
 
-    // Only update our own tank's controls/camera
-    this.playerMovement?.update(deltaTime);
+    // CLIENT-SIDE PREDICTION: Update current player position immediately
+    // This makes the game feel responsive without waiting for server confirmation
+    if (this.playerMovement && this.currentSessionId) {
+      this.playerMovement.update(deltaTime);
+
+      // Update gun position to follow tank (PlayerMovement handles this, but ensure it's synced)
+      if (this.tankSprite && this.tankGunSprite) {
+        this.tankGunSprite.x = this.tankSprite.x;
+        this.tankGunSprite.y = this.tankSprite.y;
+      }
+    }
+
+    // Continue interpolating other players (handled in onStateChange, but ensure smooth updates)
+    // The interpolation happens in onStateChange, but we can also update it here for smoother results
+    for (const [sessionId, interp] of this.playerInterpolation.entries()) {
+      if (sessionId === this.currentSessionId) continue; // Skip current player
+
+      const entity = this.playerEntities[sessionId];
+      if (!entity) continue;
+
+      const now = performance.now();
+      const elapsed = now - interp.startTime;
+      const t = Math.min(1, elapsed / interp.duration);
+
+      // Update interpolated positions
+      entity.body.x = interp.fromX + (interp.toX - interp.fromX) * t;
+      entity.body.y = interp.fromY + (interp.toY - interp.fromY) * t;
+      entity.gun.x = entity.body.x;
+      entity.gun.y = entity.body.y;
+
+      // Angular interpolation
+      const rotDiff =
+        ((interp.toRotation - interp.fromRotation + Math.PI) % (2 * Math.PI)) -
+        Math.PI;
+      entity.body.rotation = interp.fromRotation + rotDiff * t;
+
+      const gunRotDiff =
+        ((interp.toGunRotation - interp.fromGunRotation + Math.PI) %
+          (2 * Math.PI)) -
+        Math.PI;
+      entity.gun.rotation = interp.fromGunRotation + gunRotDiff * t;
+
+      // Update username label and health bar positions
+      if (entity.usernameLabel) {
+        const usernameY = entity.body.y - entity.body.height * 0.5 - 15;
+        entity.usernameLabel.x = entity.body.x;
+        entity.usernameLabel.y = usernameY;
+      }
+    }
 
     // Collect tank hitboxes for collision detection (only alive players and bots)
     const tankHitboxes: TankHitbox[] = [];
