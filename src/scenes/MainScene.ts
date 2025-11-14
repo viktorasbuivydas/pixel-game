@@ -1080,6 +1080,9 @@ export class MainScene extends Scene {
         this.playerMovement.getY(),
         this.playerMovement.getTankRotation(),
         this.playerMovement.getGunRotation(),
+        this.playerMovement.getCurrentSpeed(),
+        this.playerMovement.getCurrentRotationSpeed(),
+        this.playerMovement.getCurrentGunRotationSpeed(),
         this.currentSessionId
       );
     }
@@ -1258,11 +1261,36 @@ export class MainScene extends Scene {
       return;
     }
 
+    // Get the world position of the gun sprite
+    // For Tank1, the gun sprite is inside a container, so we need to get its world position
+    const ourEntity = this.playerEntities[this.currentSessionId];
+    let gunWorldX: number;
+    let gunWorldY: number;
+    let gunRotation: number;
+
+    if (ourEntity && (ourEntity as any).tank1Entity) {
+      // Tank1 uses container structure - get world position
+      const gunSprite = ourEntity.gun;
+      // Get the world transform of the gun sprite
+      const worldTransform = gunSprite.worldTransform;
+      // The gun sprite's anchor point (rotation point) is at its local (0, 0) after anchor is set
+      // Get the world position of the anchor point
+      gunWorldX = worldTransform.tx;
+      gunWorldY = worldTransform.ty;
+      // Get the world rotation (container rotation + gun rotation)
+      gunRotation = gunSprite.rotation;
+    } else {
+      // Legacy TankFactory - use sprite position directly
+      gunWorldX = this.tankGunSprite.x;
+      gunWorldY = this.tankGunSprite.y;
+      gunRotation = this.tankGunSprite.rotation;
+    }
+
     // Shoot bullet from gun position and rotation
     const bullet = this.gunManager.shoot(
-      this.tankGunSprite.x,
-      this.tankGunSprite.y,
-      this.tankGunSprite.rotation,
+      gunWorldX,
+      gunWorldY,
+      gunRotation,
       this.currentSessionId
     );
 

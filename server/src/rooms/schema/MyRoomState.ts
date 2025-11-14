@@ -8,6 +8,8 @@ export class Player extends Schema {
   @type("number") rotation: number;
   @type("number") gunRotation: number;
   @type("number") speed: number;
+  @type("number") rotationSpeed: number;
+  @type("number") gunRotationSpeed: number;
   @type("number") health: number;
   @type("number") kills: number = 0;
   @type("number") colorIndex: number = 1;

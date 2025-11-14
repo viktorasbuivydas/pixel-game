@@ -50,7 +50,9 @@ export class TankBaseFactory {
       baseSprite = new Sprite(baseTexture);
     }
 
-    baseSprite.scale.set(1.0, 1.0); // No scaling applied
+    // Scale sprites to 64x64 (0.5x scale from 128x128)
+    const baseScale = config.scale ?? 0.5;
+    baseSprite.scale.set(baseScale, baseScale);
     baseSprite.x = config.initialX;
     baseSprite.y = config.initialY;
     baseSprite.anchor.set(0.5);
@@ -59,7 +61,7 @@ export class TankBaseFactory {
     // Load and create dead tank base sprite
     const deadTexture = await Assets.load(baseConfig.deadTextureUrl);
     const deadSprite = new Sprite(deadTexture);
-    deadSprite.scale.set(1.0, 1.0); // No scaling applied
+    deadSprite.scale.set(baseScale, baseScale);
     deadSprite.x = config.initialX;
     deadSprite.y = config.initialY;
     deadSprite.anchor.set(0.5);

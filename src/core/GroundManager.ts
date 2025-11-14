@@ -35,6 +35,11 @@ export class GroundManager {
     const groundTexture = await Assets.load(texture1Url);
     const groundTexture2 = await Assets.load(texture2Url);
 
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+
     for (let i = 0; i < tilesX; i++) {
       for (let j = 0; j < tilesY; j++) {
         const tile = new Sprite(
@@ -44,14 +49,33 @@ export class GroundManager {
         tile.x = i * tileSize;
         tile.y = j * tileSize;
         this.container.addChild(tile);
+
+        // Update bounds based on the scaled tile positions and sizes
+        const tileWidth = tile.width;
+        const tileHeight = tile.height;
+        const tileMinX = tile.x;
+        const tileMinY = tile.y;
+        const tileMaxX = tile.x + tileWidth;
+        const tileMaxY = tile.y + tileHeight;
+
+        if (tileMinX < minX) minX = tileMinX;
+        if (tileMinY < minY) minY = tileMinY;
+        if (tileMaxX > maxX) maxX = tileMaxX;
+        if (tileMaxY > maxY) maxY = tileMaxY;
       }
     }
 
+    // Defensive fallback if loop did not run
+    if (minX === Number.POSITIVE_INFINITY) minX = 0;
+    if (minY === Number.POSITIVE_INFINITY) minY = 0;
+    if (maxX === Number.NEGATIVE_INFINITY) maxX = tilesX * tileSize * tileScale;
+    if (maxY === Number.NEGATIVE_INFINITY) maxY = tilesY * tileSize * tileScale;
+
     return {
-      minX: 20,
-      minY: 20,
-      maxX: tilesX * tileSize,
-      maxY: tilesY * tileSize,
+      minX,
+      minY,
+      maxX,
+      maxY,
     };
   }
 }

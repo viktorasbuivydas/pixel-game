@@ -32,7 +32,9 @@ export class Tank1 {
    * Create a complete tank with base and gun
    */
   static async create(config: Tank1Config): Promise<Tank1Sprites> {
-    const scale = config.scale ?? 1.0;
+    // Default scale is 0.5 to make sprites 64x64 (from 128x128 base size)
+    // If a scale is provided, use it directly (absolute scale, not relative)
+    const scale = config.scale ?? 0.5;
 
     // Create tank base
     const base = await TankBaseFactory.create({

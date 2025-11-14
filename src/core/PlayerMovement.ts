@@ -81,6 +81,7 @@ export class PlayerMovement {
   private tankGunSprite: Sprite;
   private frontArrow: Graphics; // Arrow indicator showing tank front direction
   private gunYOffset: number = 0; // Y offset for gun position relative to tank base
+  private mainContainer: Container | null = null; // Cache the main container reference
 
   // -- Realistic tank mass (kg) and power (watts) --
   private _tankMassKg: number = 32000; // Example: 32,000 kg (T-90 MBT)
@@ -153,6 +154,9 @@ export class PlayerMovement {
     this.gunYOffset = options?.gunYOffset ?? 0;
     this.setupMouseTracking();
     this.lastSpriteRotation = tankSprite.rotation;
+
+    // Cache the main container reference if using Tank1 structure
+    this.findMainContainer();
 
     if (options) {
       if (typeof options.tankRotateSpeed === "number") {
@@ -252,6 +256,30 @@ export class PlayerMovement {
 
   private _computedMaxSpeedPix: number = 0;
   private currentMaxSpeed: number = 0; // pixels/frame
+
+  /**
+   * Find and cache the main container that holds both base and gun containers
+   */
+  private findMainContainer(): void {
+    if (
+      this.tankSprite.parent &&
+      this.tankSprite.parent !== this.app.stage &&
+      this.tankGunSprite.parent &&
+      this.tankGunSprite.parent !== this.app.stage
+    ) {
+      // Both sprites are in containers - check if they share the same parent
+      const baseContainer = this.tankSprite.parent;
+      const gunContainer = this.tankGunSprite.parent;
+
+      if (
+        baseContainer.parent &&
+        baseContainer.parent === gunContainer.parent
+      ) {
+        // Both containers are siblings - their parent is the main container
+        this.mainContainer = baseContainer.parent as Container;
+      }
+    }
+  }
 
   /**
    * Track mouse position in screen coordinates
@@ -403,8 +431,24 @@ export class PlayerMovement {
         speedThisFrame *
         dt *
         Math.sign(this.currentForward);
-      this.tankSprite.x += dx;
-      this.tankSprite.y += dy;
+
+      // Move the tank - use cached main container if available
+      if (this.mainContainer) {
+        // Tank1 structure - move main container (moves both base and gun together)
+        this.mainContainer.x += dx;
+        this.mainContainer.y += dy;
+      } else if (
+        this.tankSprite.parent &&
+        this.tankSprite.parent !== this.app.stage
+      ) {
+        // Container structure but main container not found - move base container
+        this.tankSprite.parent.x += dx;
+        this.tankSprite.parent.y += dy;
+      } else {
+        // Legacy structure - move sprite directly
+        this.tankSprite.x += dx;
+        this.tankSprite.y += dy;
+      }
     } else if (
       speedThisFrame > 0.001 &&
       forwardDirection === 0 &&
@@ -422,8 +466,24 @@ export class PlayerMovement {
         speedThisFrame *
         dt *
         Math.sign(this.currentForward);
-      this.tankSprite.x += dx;
-      this.tankSprite.y += dy;
+
+      // Move the tank - use cached main container if available
+      if (this.mainContainer) {
+        // Tank1 structure - move main container (moves both base and gun together)
+        this.mainContainer.x += dx;
+        this.mainContainer.y += dy;
+      } else if (
+        this.tankSprite.parent &&
+        this.tankSprite.parent !== this.app.stage
+      ) {
+        // Container structure but main container not found - move base container
+        this.tankSprite.parent.x += dx;
+        this.tankSprite.parent.y += dy;
+      } else {
+        // Legacy structure - move sprite directly
+        this.tankSprite.x += dx;
+        this.tankSprite.y += dy;
+      }
     }
     // Otherwise: tank is stopped (currentForward == 0), no movement
 
@@ -444,16 +504,38 @@ export class PlayerMovement {
       mouseWorld = { x: tmp.x, y: tmp.y };
     }
 
-    // Move the gun together with the tank base, with Y offset for different tank heights
-    this.tankGunSprite.x = this.tankSprite.x;
-    this.tankGunSprite.y = this.tankSprite.y + this.gunYOffset;
+    // Get the world position of the gun sprite for aiming calculations
+    // For Tank1 container structure, the gun sprite position is relative to container
+    // We need to calculate the world position for mouse aiming
+    let gunWorldX: number;
+    let gunWorldY: number;
+
+    // Check if gun sprite is in a container (Tank1 structure)
+    if (
+      this.tankGunSprite.parent &&
+      this.tankGunSprite.parent !== this.app.stage
+    ) {
+      // Gun is in a container - get world position
+      const worldTransform = this.tankGunSprite.worldTransform;
+      gunWorldX = worldTransform.tx;
+      gunWorldY = worldTransform.ty;
+    } else {
+      // Gun is directly on stage (legacy structure)
+      gunWorldX = this.tankGunSprite.x;
+      gunWorldY = this.tankGunSprite.y;
+      // Move the gun together with the tank base, with Y offset for different tank heights
+      this.tankGunSprite.x = this.tankSprite.x;
+      this.tankGunSprite.y = this.tankSprite.y + this.gunYOffset;
+      gunWorldX = this.tankGunSprite.x;
+      gunWorldY = this.tankGunSprite.y;
+    }
 
     // Update front arrow position and rotation
     this.updateFrontArrow();
 
     // Aim tank's gun directly at mouse - no smoothing, always follows mouse
-    const dxGun = mouseWorld.x - this.tankGunSprite.x;
-    const dyGun = mouseWorld.y - this.tankGunSprite.y;
+    const dxGun = mouseWorld.x - gunWorldX;
+    const dyGun = mouseWorld.y - gunWorldY;
 
     // Compute angle so "up" is forward (aligns with tank)
     // Math.atan2 gives angle where 0 points right, PixiJS rotation 0 points up
@@ -473,9 +555,11 @@ export class PlayerMovement {
     }
     this.wasRotatingLastFrame = rotating;
 
-    // Clamp player position within world bounds
+    // Clamp player position within world bounds (make sure tank cannot leave bounds)
+    // Note: World bounds are in viewport local space (since tiles are added to viewport)
+    // So we need to use the tank's position relative to the viewport, not global position
     if (this.worldBounds) {
-      // Account for sprite anchor point (0.5, 0.5) and scaled size
+      // Account for sprite anchor (0.5, 0.5) and scaled size
       const tankWidth =
         this.tankSprite.width * Math.abs(this.tankSprite.scale.x);
       const tankHeight =
@@ -483,14 +567,111 @@ export class PlayerMovement {
       const halfWidth = tankWidth / 2;
       const halfHeight = tankHeight / 2;
 
-      this.tankSprite.x = Math.max(
+      // Determine which object to move (container or sprite)
+      // This should be the object that's directly inside the viewport
+      let applyTo: Container | Sprite;
+      if (this.mainContainer) {
+        applyTo = this.mainContainer;
+      } else if (
+        this.tankSprite.parent &&
+        this.tankSprite.parent !== this.app.stage
+      ) {
+        applyTo = this.tankSprite.parent;
+      } else {
+        applyTo = this.tankSprite;
+      }
+
+      // Get the position in viewport local space (world space for the game)
+      // Since the tank is inside the viewport, we can use the local position directly
+      // But we need to account for any intermediate containers
+      let viewportSpaceX: number;
+      let viewportSpaceY: number;
+      let isDirectChildOfViewport = false;
+
+      // If the object is directly in the viewport, use its local position
+      // Otherwise, we need to calculate the position relative to the viewport
+      if (
+        applyTo.parent &&
+        typeof (applyTo.parent as any).toWorld === "function"
+      ) {
+        // Parent is a viewport - use local position directly
+        viewportSpaceX = applyTo.x;
+        viewportSpaceY = applyTo.y;
+        isDirectChildOfViewport = true;
+      } else {
+        // Need to find the viewport parent and calculate position relative to it
+        let current: any = applyTo.parent;
+        let viewport: any = null;
+        while (current && current !== this.app.stage) {
+          if (typeof current.toWorld === "function") {
+            viewport = current;
+            break;
+          }
+          current = current.parent;
+        }
+
+        if (viewport) {
+          // Get world position and convert to viewport local space
+          const worldPos = new Point();
+          applyTo.getGlobalPosition(worldPos, false);
+          viewport.toLocal(worldPos, undefined, worldPos);
+          viewportSpaceX = worldPos.x;
+          viewportSpaceY = worldPos.y;
+        } else {
+          // Fallback: use local position (assumes direct child of viewport)
+          viewportSpaceX = applyTo.x;
+          viewportSpaceY = applyTo.y;
+          isDirectChildOfViewport = true;
+        }
+      }
+
+      // Clamp position so all edges of tank remain *inside* world bounds
+      const clampedX = Math.max(
         this.worldBounds.minX + halfWidth,
-        Math.min(this.worldBounds.maxX - halfWidth, this.tankSprite.x)
+        Math.min(this.worldBounds.maxX - halfWidth, viewportSpaceX)
       );
-      this.tankSprite.y = Math.max(
+      const clampedY = Math.max(
         this.worldBounds.minY + halfHeight,
-        Math.min(this.worldBounds.maxY - halfHeight, this.tankSprite.y)
+        Math.min(this.worldBounds.maxY - halfHeight, viewportSpaceY)
       );
+
+      // Calculate the difference in viewport space
+      const dx = clampedX - viewportSpaceX;
+      const dy = clampedY - viewportSpaceY;
+
+      // Only adjust if we need to clamp
+      if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) {
+        if (isDirectChildOfViewport) {
+          // Object is directly in viewport - delta is already in the correct space
+          applyTo.x += dx;
+          applyTo.y += dy;
+        } else {
+          // Object is in a container - need to convert clamped position from viewport space to object's local space
+          // Find the viewport again to convert from viewport space
+          let current: any = applyTo.parent;
+          let viewport: any = null;
+          while (current && current !== this.app.stage) {
+            if (typeof current.toWorld === "function") {
+              viewport = current;
+              break;
+            }
+            current = current.parent;
+          }
+
+          if (viewport && applyTo.parent) {
+            // Convert clamped position from viewport space to object's local space
+            const clampedViewportPos = new Point(clampedX, clampedY);
+            const localPos = new Point();
+            applyTo.parent.toLocal(clampedViewportPos, viewport, localPos);
+            applyTo.x = localPos.x;
+            applyTo.y = localPos.y;
+          } else {
+            // Fallback: just add delta (shouldn't happen in normal case)
+            applyTo.x += dx;
+            applyTo.y += dy;
+          }
+        }
+      }
     }
   }
 
@@ -595,6 +776,35 @@ export class PlayerMovement {
    */
   public getGunRotation(): number {
     return this.tankGunSprite.rotation;
+  }
+
+  /**
+   * Returns the current speed of the tank in pixels per frame.
+   */
+  public getCurrentSpeed(): number {
+    // Calculate current speed based on currentForward and max speed
+    const easedForward =
+      Math.sign(this.currentForward) *
+      smoothstep(Math.abs(this.currentForward));
+    return (
+      this.currentMaxSpeed *
+      Math.abs(easedForward) *
+      this.movementSpeedMultiplier
+    );
+  }
+
+  /**
+   * Returns the current rotation speed of the tank in radians per frame (at delta = 1).
+   */
+  public getCurrentRotationSpeed(): number {
+    return this.tankRotateSpeed * this.tankRotationSpeedMultiplier;
+  }
+
+  /**
+   * Returns the current gun rotation speed in radians per frame (at delta = 1).
+   */
+  public getCurrentGunRotationSpeed(): number {
+    return this.turretRotateSpeed * this.gunRotationSpeedMultiplier;
   }
 
   /**

@@ -59,8 +59,8 @@ export class TankGunFactory {
       gunSprite = new Sprite(gunTexture);
     }
 
-    // Apply scale if provided
-    const scale = config.scale ?? 1.0;
+    // Apply scale if provided, default to 0.5 to make sprites 64x64 (from 128x128)
+    const scale = config.scale ?? 0.5;
     gunSprite.scale.set(scale, scale);
     gunSprite.x = config.initialX;
     gunSprite.y = config.initialY;

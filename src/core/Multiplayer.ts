@@ -13,12 +13,18 @@ export class Multiplayer {
     y: number;
     rotation: number;
     gunRotation: number;
+    speed: number;
+    rotationSpeed: number;
+    gunRotationSpeed: number;
     sessionId: string;
   } = {
     x: 0,
     y: 0,
     rotation: 0,
     gunRotation: 0,
+    speed: 0,
+    rotationSpeed: 0,
+    gunRotationSpeed: 0,
     sessionId: "",
   };
 
@@ -312,13 +318,16 @@ export class Multiplayer {
   }
 
   /**
-   * Send player movement input (position/rotation/gunRotation) to the server
+   * Send player movement input (position/rotation/gunRotation/speed) to the server
    */
   sendPlayerInput(
     x: number,
     y: number,
     rotation: number,
     gunRotation: number,
+    speed: number,
+    rotationSpeed: number,
+    gunRotationSpeed: number,
     sessionId?: string
   ): void {
     if (!this.room) {
@@ -331,6 +340,9 @@ export class Multiplayer {
     this.inputPayload.y = y;
     this.inputPayload.rotation = rotation;
     this.inputPayload.gunRotation = gunRotation;
+    this.inputPayload.speed = speed;
+    this.inputPayload.rotationSpeed = rotationSpeed;
+    this.inputPayload.gunRotationSpeed = gunRotationSpeed;
     // Set sessionId if provided, else get from current session
     if (sessionId) {
       this.inputPayload.sessionId = sessionId;

@@ -15,12 +15,32 @@ export class MyRoom extends Room<MyRoomState> {
 
     this.onMessage("player-input", (client, message) => {
       const player = this.state.players.get(client.id);
+      if (!player) return;
 
-      player.x = message.x;
-      player.y = message.y;
+      // Instead of trusting the client, compute the new position based on speed and rotation
+      // Assume 1 tick per input, so use current position + velocity
+      // Clamp speed to reasonable value to prevent cheating
+      const MAX_SPEED = 16; // adjust as needed for your game
+      const speed = Math.max(
+        -MAX_SPEED,
+        Math.min(MAX_SPEED, message.speed ?? 0)
+      );
+      const rotation = message.rotation ?? player.rotation ?? 0;
+
+      // Move in the direction the tank is facing (assuming rotation 0 = up)
+      const deltaX = Math.cos(rotation - Math.PI / 2) * speed;
+      const deltaY = Math.sin(rotation - Math.PI / 2) * speed;
+      player.x = (player.x ?? 0) + deltaX;
+      player.y = (player.y ?? 0) + deltaY;
+      player.rotation = rotation;
+      player.gunRotation = message.gunRotation ?? player.gunRotation;
       player.sessionId = client.sessionId;
-      player.rotation = message.rotation;
-      player.gunRotation = message.gunRotation;
+
+      // You might want to clamp player.x and player.y to map bounds here for extra safety
+
+      player.speed = speed;
+      player.rotationSpeed = message.rotationSpeed ?? 0;
+      player.gunRotationSpeed = message.gunRotationSpeed ?? 0;
     });
 
     // Handle username updates
@@ -168,6 +188,8 @@ export class MyRoom extends Room<MyRoomState> {
     player.rotation = 0;
     player.gunRotation = 0;
     player.speed = 0;
+    player.rotationSpeed = 0;
+    player.gunRotationSpeed = 0;
     player.kills = 0; // Initialize kills to 0
 
     // Set tank selection from options (defaults to 1 if not provided)
