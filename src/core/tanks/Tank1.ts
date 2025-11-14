@@ -25,7 +25,6 @@ export interface Tank1Sprites {
   usernameLabel?: Text;
   healthBar?: Graphics;
   healthBarBackground?: Graphics;
-  gunYOffset?: number; // Y offset for gun position relative to tank base center
 }
 
 export class Tank1 {
@@ -56,30 +55,24 @@ export class Tank1 {
       customBulletSpeed: config.customBulletSpeed,
     });
 
-    // Get gun Y offset from configs
-    // Base can have per-gun offsets (gunYOffsets map) or a general offset (gunYOffset)
-    // Gun can also have its own offset - they are combined (additive)
+    // Get gun Y offset from config if needed for fine-tuning alignment
     const gunConfig = TankConfigRegistry.getTankGun(config.gunId);
-    const baseYOffset = TankConfigRegistry.getGunYOffsetForBase(
-      config.baseId,
-      config.gunId
-    );
     const gunYOffset = gunConfig?.gunYOffset ?? 0;
-    // Combine both offsets (base offset + gun offset) for fine-tuning
-    const totalGunYOffset = baseYOffset + gunYOffset;
 
     // Create main container
     const container = new Container();
     container.addChild(base.container);
     container.addChild(gun.container);
 
-    // Adjust gun position with Y offset
-    gun.gun.y += totalGunYOffset;
-    if (gun.gunBase) {
-      gun.gunBase.y += totalGunYOffset;
-    }
-    if (gun.fireAnimation) {
-      gun.fireAnimation.y += totalGunYOffset;
+    // Apply gun Y offset if specified (moves entire gun sprite to align with tank center hole)
+    if (gunYOffset !== 0) {
+      gun.gun.y += gunYOffset;
+      if (gun.gunBase) {
+        gun.gunBase.y += gunYOffset;
+      }
+      if (gun.fireAnimation) {
+        gun.fireAnimation.y += gunYOffset;
+      }
     }
 
     // Create username label if provided
@@ -149,7 +142,6 @@ export class Tank1 {
       usernameLabel: usernameLabel,
       healthBar: healthBar,
       healthBarBackground: healthBarBackground,
-      gunYOffset: gunYOffset,
     };
   }
 

@@ -1,4 +1,4 @@
-import { Container, Graphics, Text, TextStyle } from "pixi.js";
+import { Container, Graphics, Text, TextStyle, Sprite, Assets } from "pixi.js";
 import { Scene } from "./Scene";
 import { SceneManager } from "../core/SceneManager";
 import { MainScene } from "./MainScene";
@@ -61,8 +61,8 @@ export class TankSelectionScene extends Scene {
 
     // Create selection sections
     this.createColorSelection();
-    this.createBaseSelection();
-    this.createGunSelection();
+    await this.createBaseSelection();
+    await this.createGunSelection();
     this.createInfoSection();
     this.createStartButton();
     this.createPreviewButton();
@@ -131,9 +131,9 @@ export class TankSelectionScene extends Scene {
 
     button.addChild(graphics);
 
-    button.on("pointerdown", () => {
+    button.on("pointerdown", async () => {
       this.selectedColor = colorIndex;
-      this.updateAllButtons();
+      await this.updateAllButtons();
       this.updatePreview().catch(console.error);
       this.updateInfo();
     });
@@ -144,7 +144,7 @@ export class TankSelectionScene extends Scene {
     return button;
   }
 
-  private createBaseSelection(): void {
+  private async createBaseSelection(): Promise<void> {
     const sectionY = 250;
     const labelStyle = new TextStyle({
       fontFamily: "Arial",
@@ -168,7 +168,7 @@ export class TankSelectionScene extends Scene {
     const startX = this.screenWidth / 2 - spacing * 1.5;
 
     for (let i = 1; i <= 4; i++) {
-      const button = this.createBaseButton(
+      const button = await this.createBaseButton(
         startX + (i - 1) * spacing,
         sectionY + 50,
         buttonSize,
@@ -179,13 +179,13 @@ export class TankSelectionScene extends Scene {
     }
   }
 
-  private createBaseButton(
+  private async createBaseButton(
     x: number,
     y: number,
     size: number,
     baseIndex: number,
     isSelected: boolean
-  ): Container {
+  ): Promise<Container> {
     const button = new Container();
     button.x = x;
     button.y = y;
@@ -199,8 +199,26 @@ export class TankSelectionScene extends Scene {
     graphics.roundRect(-size / 2, -size / 2, size, size, 8);
     graphics.fill(0x333333);
     graphics.stroke({ width: borderWidth, color: borderColor });
+    button.addChild(graphics); // Add graphics first (background)
 
-    // Base names
+    // Load and display tank base sprite
+    const baseId = getTankBaseIdFromIndex(baseIndex, this.selectedColor);
+    const baseConfig = TankConfigRegistry.getTankBase(baseId);
+
+    if (baseConfig) {
+      try {
+        const baseTexture = await Assets.load(baseConfig.baseTextureUrl);
+        const baseSprite = new Sprite(baseTexture);
+        baseSprite.anchor.set(0.5);
+        baseSprite.scale.set(0.3); // Scale down to fit in button
+        button.addChild(baseSprite); // Add sprite on top of graphics
+        (button as any).baseSprite = baseSprite;
+      } catch (error) {
+        console.error(`Failed to load base sprite for ${baseId}:`, error);
+      }
+    }
+
+    // Base names below button
     const names = ["Scout", "Light", "Heavy", "Medium"];
     const textStyle = new TextStyle({
       fontFamily: "Arial",
@@ -214,13 +232,11 @@ export class TankSelectionScene extends Scene {
     });
     text.anchor.set(0.5);
     text.y = size / 2 + 20;
+    button.addChild(text); // Add text last (on top)
 
-    button.addChild(graphics);
-    button.addChild(text);
-
-    button.on("pointerdown", () => {
+    button.on("pointerdown", async () => {
       this.selectedBase = baseIndex;
-      this.updateAllButtons();
+      await this.updateAllButtons();
       this.updatePreview().catch(console.error);
       this.updateInfo();
     });
@@ -231,7 +247,7 @@ export class TankSelectionScene extends Scene {
     return button;
   }
 
-  private createGunSelection(): void {
+  private async createGunSelection(): Promise<void> {
     const sectionY = 380;
     const labelStyle = new TextStyle({
       fontFamily: "Arial",
@@ -255,7 +271,7 @@ export class TankSelectionScene extends Scene {
     const startX = (this.screenWidth / 4) * 3 - spacing * 1.5;
 
     for (let i = 1; i <= 4; i++) {
-      const button = this.createGunButton(
+      const button = await this.createGunButton(
         startX + (i - 1) * spacing,
         sectionY + 50,
         buttonSize,
@@ -266,13 +282,13 @@ export class TankSelectionScene extends Scene {
     }
   }
 
-  private createGunButton(
+  private async createGunButton(
     x: number,
     y: number,
     size: number,
     gunIndex: number,
     isSelected: boolean
-  ): Container {
+  ): Promise<Container> {
     const button = new Container();
     button.x = x;
     button.y = y;
@@ -286,8 +302,26 @@ export class TankSelectionScene extends Scene {
     graphics.roundRect(-size / 2, -size / 2, size, size, 8);
     graphics.fill(0x333333);
     graphics.stroke({ width: borderWidth, color: borderColor });
+    button.addChild(graphics); // Add graphics first (background)
 
-    // Gun names
+    // Load and display gun sprite
+    const gunId = getGunIdFromIndex(gunIndex, this.selectedColor);
+    const gunConfig = TankConfigRegistry.getTankGun(gunId);
+
+    if (gunConfig) {
+      try {
+        const gunTexture = await Assets.load(gunConfig.gunTextureUrl);
+        const gunSprite = new Sprite(gunTexture);
+        gunSprite.anchor.set(0.5);
+        gunSprite.scale.set(0.4); // Scale down to fit in button
+        button.addChild(gunSprite); // Add sprite on top of graphics
+        (button as any).gunSprite = gunSprite;
+      } catch (error) {
+        console.error(`Failed to load gun sprite for ${gunId}:`, error);
+      }
+    }
+
+    // Gun names below button
     const names = ["Rapid", "Balanced", "Sniper", "Heavy"];
     const textStyle = new TextStyle({
       fontFamily: "Arial",
@@ -301,13 +335,11 @@ export class TankSelectionScene extends Scene {
     });
     text.anchor.set(0.5);
     text.y = size / 2 + 20;
+    button.addChild(text); // Add text last (on top)
 
-    button.addChild(graphics);
-    button.addChild(text);
-
-    button.on("pointerdown", () => {
+    button.on("pointerdown", async () => {
       this.selectedGun = gunIndex;
-      this.updateAllButtons();
+      await this.updateAllButtons();
       this.updatePreview().catch(console.error);
       this.updateInfo();
     });
@@ -372,14 +404,11 @@ export class TankSelectionScene extends Scene {
       return;
     }
 
-    const baseNames = ["Scout Tank", "Light Tank", "Heavy Tank", "Medium Tank"];
-    const gunNames = ["Rapid Fire", "Balanced", "Sniper", "Heavy"];
-
     const info = [
-      `TANK: ${baseNames[this.selectedBase - 1]}`,
+      `TANK: ${baseConfig.name}`,
       `Speed: ${(baseConfig.speed * 100).toFixed(0)}%`,
       "",
-      `GUN: ${gunNames[this.selectedGun - 1]}`,
+      `GUN: ${gunConfig.name}`,
       `Range: ${gunConfig.range}m`,
       `Fire Rate: ${gunConfig.fireRate}/s`,
       `Damage: ${gunConfig.damage}`,
@@ -409,7 +438,7 @@ export class TankSelectionScene extends Scene {
         gunId: gunId,
         initialX: this.screenWidth / 2,
         initialY: this.screenHeight / 2 + 50,
-        scale: 0.6, // Larger preview
+        scale: 1, // Larger preview
       });
 
       this.previewTank = tank.container;
@@ -419,9 +448,9 @@ export class TankSelectionScene extends Scene {
     }
   }
 
-  private updateAllButtons(): void {
-    // Update all button borders based on selection
-    this.children.forEach((child) => {
+  private async updateAllButtons(): Promise<void> {
+    // Update all button borders and sprites based on selection
+    for (const child of this.children) {
       if ((child as any).type === "color") {
         const isSelected = (child as any).index === this.selectedColor;
         const graphics = child.children[0] as Graphics;
@@ -436,28 +465,72 @@ export class TankSelectionScene extends Scene {
         });
       } else if ((child as any).type === "base") {
         const isSelected = (child as any).index === this.selectedBase;
-        const graphics = child.children[0] as Graphics;
-        graphics.clear();
-        const size = 80;
-        graphics.roundRect(-size / 2, -size / 2, size, size, 8);
-        graphics.fill(0x333333);
-        graphics.stroke({
-          width: isSelected ? 4 : 2,
-          color: isSelected ? 0xffff00 : 0xffffff,
-        });
+        const baseIndex = (child as any).index;
+
+        // Update border
+        const graphics = child.children.find(
+          (c: any) => c instanceof Graphics
+        ) as Graphics;
+        if (graphics) {
+          graphics.clear();
+          const size = 80;
+          graphics.roundRect(-size / 2, -size / 2, size, size, 8);
+          graphics.fill(0x333333);
+          graphics.stroke({
+            width: isSelected ? 4 : 2,
+            color: isSelected ? 0xffff00 : 0xffffff,
+          });
+        }
+
+        // Update sprite if color changed
+        const baseSprite = (child as any).baseSprite as Sprite | undefined;
+        if (baseSprite) {
+          const baseId = getTankBaseIdFromIndex(baseIndex, this.selectedColor);
+          const baseConfig = TankConfigRegistry.getTankBase(baseId);
+          if (baseConfig) {
+            try {
+              const baseTexture = await Assets.load(baseConfig.baseTextureUrl);
+              baseSprite.texture = baseTexture;
+            } catch (error) {
+              console.error(`Failed to update base sprite:`, error);
+            }
+          }
+        }
       } else if ((child as any).type === "gun") {
         const isSelected = (child as any).index === this.selectedGun;
-        const graphics = child.children[0] as Graphics;
-        graphics.clear();
-        const size = 80;
-        graphics.roundRect(-size / 2, -size / 2, size, size, 8);
-        graphics.fill(0x333333);
-        graphics.stroke({
-          width: isSelected ? 4 : 2,
-          color: isSelected ? 0xffff00 : 0xffffff,
-        });
+        const gunIndex = (child as any).index;
+
+        // Update border
+        const graphics = child.children.find(
+          (c: any) => c instanceof Graphics
+        ) as Graphics;
+        if (graphics) {
+          graphics.clear();
+          const size = 80;
+          graphics.roundRect(-size / 2, -size / 2, size, size, 8);
+          graphics.fill(0x333333);
+          graphics.stroke({
+            width: isSelected ? 4 : 2,
+            color: isSelected ? 0xffff00 : 0xffffff,
+          });
+        }
+
+        // Update sprite if color changed
+        const gunSprite = (child as any).gunSprite as Sprite | undefined;
+        if (gunSprite) {
+          const gunId = getGunIdFromIndex(gunIndex, this.selectedColor);
+          const gunConfig = TankConfigRegistry.getTankGun(gunId);
+          if (gunConfig) {
+            try {
+              const gunTexture = await Assets.load(gunConfig.gunTextureUrl);
+              gunSprite.texture = gunTexture;
+            } catch (error) {
+              console.error(`Failed to update gun sprite:`, error);
+            }
+          }
+        }
       }
-    });
+    }
   }
 
   private createStartButton(): void {

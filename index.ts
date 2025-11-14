@@ -30,12 +30,9 @@ initializeTankRegistry();
   document.body.appendChild(app.canvas);
 
   // Initialize and show sign-in scene
-  // const signInScene = new SignInScene();
-  // signInScene.initialize();
-  // SceneManager.changeScene(signInScene);
-  const tankPreviewScene = new TankPreviewScene();
-  tankPreviewScene.initialize();
-  SceneManager.changeScene(tankPreviewScene);
+  const signInScene = new SignInScene();
+  signInScene.initialize();
+  SceneManager.changeScene(signInScene);
 
   // Game loop - update current scene
   app.ticker.add((time) => {

@@ -64,7 +64,28 @@ export class TankGunFactory {
     gunSprite.scale.set(scale, scale);
     gunSprite.x = config.initialX;
     gunSprite.y = config.initialY;
-    gunSprite.anchor.set(0.5);
+
+    // Calculate anchor point - support both relative (0-1) and pixel-based positioning
+    let anchorX = 0.5; // Default to center horizontally
+    let anchorY = 0.15; // Default to 15% from top vertically
+
+    if (gunConfig.anchor) {
+      anchorX = gunConfig.anchor.x;
+      anchorY = gunConfig.anchor.y;
+    }
+
+    // If pixel offset from bottom is specified, calculate anchor dynamically based on sprite height
+    // This allows pixel-precise positioning regardless of sprite size
+    if (gunConfig.anchorPixelOffsetFromBottom !== undefined) {
+      const spriteHeight = gunSprite.height;
+      const pixelOffsetFromBottom = gunConfig.anchorPixelOffsetFromBottom;
+      // Calculate anchor Y: 1.0 is bottom, so we subtract the offset ratio
+      anchorY = 1.0 - pixelOffsetFromBottom / spriteHeight;
+      // Clamp to valid range [0, 1]
+      anchorY = Math.max(0, Math.min(1, anchorY));
+    }
+
+    gunSprite.anchor.set(anchorX, anchorY);
     gunSprite.rotation = 0;
 
     container.addChild(gunSprite);
@@ -95,7 +116,11 @@ export class TankGunFactory {
       fireAnimation.loop = false; // Fire animation should play once
       fireAnimation.visible = false; // Hidden by default
       fireAnimation.scale.set(scale, scale);
-      fireAnimation.anchor.set(0.5);
+
+      // Use fire animation anchor from config if provided, otherwise default to center
+      const fireAnchor = gunConfig.fireAnimationAnchor ?? { x: 0.5, y: 0.5 };
+      fireAnimation.anchor.set(fireAnchor.x, fireAnchor.y);
+
       fireAnimation.x = config.initialX;
       fireAnimation.y = config.initialY;
       container.addChild(fireAnimation);

@@ -156,13 +156,6 @@ import fire1_3 from "../../assets/tanks/PNG/Fire1/Fire1_3.png";
 export function initializeTankRegistry(): void {
   // Register Tank Bases - 4 bases with 4 colors each
   // Base 1 - All colors (Scout Tank)
-  // Example: Using gunYOffsets to set different offsets per unique gun ID
-  const scoutTankGunYOffsets = {
-    [GUN_IDS.RAPID_FIRE]: 20,
-    [GUN_IDS.BALANCED]: 15,
-    [GUN_IDS.HEAVY_CANNON]: 25,
-    [GUN_IDS.SNIPER]: 30,
-  };
   TankConfigRegistry.registerTankBase({
     id: "scout_tank_color1",
     baseId: TANK_BASE_IDS.SCOUT_TANK,
@@ -170,9 +163,7 @@ export function initializeTankRegistry(): void {
     baseTextureUrl: tank1Color1,
     deadTextureUrl: tank1Color1Broken,
     scale: 1,
-    speed: 1.3, // Fast scout
-    gunYOffset: 20, // Y offset for gun position (adjust as needed) - DEPRECATED: use gunYOffsets instead
-    gunYOffsets: scoutTankGunYOffsets, // Per-gun offsets using unique gun IDs
+    speed: 1.3,
   });
   TankConfigRegistry.registerTankBase({
     id: "scout_tank_color2",
@@ -182,7 +173,6 @@ export function initializeTankRegistry(): void {
     deadTextureUrl: tank1Color2Broken,
     scale: 1,
     speed: 1.3,
-    gunYOffsets: scoutTankGunYOffsets,
   });
   TankConfigRegistry.registerTankBase({
     id: "scout_tank_color3",
@@ -192,7 +182,6 @@ export function initializeTankRegistry(): void {
     deadTextureUrl: tank1Color3Broken,
     scale: 1,
     speed: 1.3,
-    gunYOffsets: scoutTankGunYOffsets,
   });
   TankConfigRegistry.registerTankBase({
     id: "scout_tank_color4",
@@ -202,16 +191,9 @@ export function initializeTankRegistry(): void {
     deadTextureUrl: tank1Color4Broken,
     scale: 1,
     speed: 1.3,
-    gunYOffsets: scoutTankGunYOffsets,
   });
 
   // Base 2 - All colors (Light Tank)
-  const lightTankGunYOffsets = {
-    [GUN_IDS.RAPID_FIRE]: 18,
-    [GUN_IDS.BALANCED]: 20,
-    [GUN_IDS.HEAVY_CANNON]: 22,
-    [GUN_IDS.SNIPER]: 25,
-  };
   TankConfigRegistry.registerTankBase({
     id: "light_tank_color1",
     baseId: TANK_BASE_IDS.LIGHT_TANK,
@@ -219,9 +201,7 @@ export function initializeTankRegistry(): void {
     baseTextureUrl: tank2Color1,
     deadTextureUrl: tank2Color1Broken,
     scale: 1,
-    speed: 1.1, // Balanced
-    gunYOffset: 20, // Y offset for gun position (adjust as needed) - DEPRECATED
-    gunYOffsets: lightTankGunYOffsets,
+    speed: 1.1,
   });
   TankConfigRegistry.registerTankBase({
     id: "light_tank_color2",
@@ -231,7 +211,6 @@ export function initializeTankRegistry(): void {
     deadTextureUrl: tank2Color2Broken,
     scale: 1,
     speed: 1.1,
-    gunYOffsets: lightTankGunYOffsets,
   });
   TankConfigRegistry.registerTankBase({
     id: "light_tank_color3",
@@ -241,7 +220,6 @@ export function initializeTankRegistry(): void {
     deadTextureUrl: tank2Color3Broken,
     scale: 1,
     speed: 1.1,
-    gunYOffsets: lightTankGunYOffsets,
   });
   TankConfigRegistry.registerTankBase({
     id: "light_tank_color4",
@@ -251,16 +229,9 @@ export function initializeTankRegistry(): void {
     deadTextureUrl: tank2Color4Broken,
     scale: 1,
     speed: 1.1,
-    gunYOffsets: lightTankGunYOffsets,
   });
 
   // Base 3 - All colors (Heavy Tank)
-  const heavyTankGunYOffsets = {
-    [GUN_IDS.RAPID_FIRE]: 22,
-    [GUN_IDS.BALANCED]: 25,
-    [GUN_IDS.HEAVY_CANNON]: 28,
-    [GUN_IDS.SNIPER]: 30,
-  };
   TankConfigRegistry.registerTankBase({
     id: "heavy_tank_color1",
     baseId: TANK_BASE_IDS.HEAVY_TANK,
@@ -268,9 +239,7 @@ export function initializeTankRegistry(): void {
     baseTextureUrl: tank3Color1,
     deadTextureUrl: tank3Color1Broken,
     scale: 1,
-    speed: 0.8, // Slow but armored
-    gunYOffset: 20, // Y offset for gun position (adjust as needed) - DEPRECATED
-    gunYOffsets: heavyTankGunYOffsets,
+    speed: 0.8,
   });
   TankConfigRegistry.registerTankBase({
     id: "heavy_tank_color2",
@@ -280,7 +249,6 @@ export function initializeTankRegistry(): void {
     deadTextureUrl: tank3Color2Broken,
     scale: 1,
     speed: 0.8,
-    gunYOffsets: heavyTankGunYOffsets,
   });
   TankConfigRegistry.registerTankBase({
     id: "heavy_tank_color3",
@@ -290,7 +258,6 @@ export function initializeTankRegistry(): void {
     deadTextureUrl: tank3Color3Broken,
     scale: 1,
     speed: 0.8,
-    gunYOffsets: heavyTankGunYOffsets,
   });
   TankConfigRegistry.registerTankBase({
     id: "heavy_tank_color4",
@@ -300,16 +267,9 @@ export function initializeTankRegistry(): void {
     deadTextureUrl: tank3Color4Broken,
     scale: 1,
     speed: 0.8,
-    gunYOffsets: heavyTankGunYOffsets,
   });
 
   // Base 4 - All colors (Medium Tank)
-  const mediumTankGunYOffsets = {
-    [GUN_IDS.RAPID_FIRE]: 15,
-    [GUN_IDS.BALANCED]: 18,
-    [GUN_IDS.HEAVY_CANNON]: 20,
-    [GUN_IDS.SNIPER]: 22,
-  };
   TankConfigRegistry.registerTankBase({
     id: "medium_tank_color1",
     baseId: TANK_BASE_IDS.MEDIUM_TANK,
@@ -317,9 +277,7 @@ export function initializeTankRegistry(): void {
     baseTextureUrl: tank4Color1,
     deadTextureUrl: tank4Color1Broken,
     scale: 1,
-    speed: 1.0, // Standard
-    gunYOffset: 0, // Y offset for gun position (adjust as needed) - DEPRECATED
-    gunYOffsets: mediumTankGunYOffsets,
+    speed: 1.0,
   });
   TankConfigRegistry.registerTankBase({
     id: "medium_tank_color2",
@@ -329,7 +287,6 @@ export function initializeTankRegistry(): void {
     deadTextureUrl: tank4Color2Broken,
     scale: 1,
     speed: 1.0,
-    gunYOffsets: mediumTankGunYOffsets,
   });
   TankConfigRegistry.registerTankBase({
     id: "medium_tank_color3",
@@ -339,7 +296,6 @@ export function initializeTankRegistry(): void {
     deadTextureUrl: tank4Color3Broken,
     scale: 1,
     speed: 1.0,
-    gunYOffsets: mediumTankGunYOffsets,
   });
   TankConfigRegistry.registerTankBase({
     id: "medium_tank_color4",
@@ -349,11 +305,11 @@ export function initializeTankRegistry(): void {
     deadTextureUrl: tank4Color4Broken,
     scale: 1,
     speed: 1.0,
-    gunYOffsets: mediumTankGunYOffsets,
   });
 
   // Register Tank Guns - 4 different guns with 4 colors each
   // Cannon 1 - Rapid Fire (All colors)
+  const rapidFireGunAnchor = { x: 0.5, y: 0.2 };
   TankConfigRegistry.registerTankGun({
     id: "rapid_fire_color1",
     gunId: GUN_IDS.RAPID_FIRE,
@@ -366,7 +322,7 @@ export function initializeTankRegistry(): void {
     fireRate: 3, // Fast fire rate
     damage: 8, // Lower damage
     bulletSpeed: 0.9,
-    gunYOffset: 0, // Y offset for gun position (adjust as needed) - Rapid Fire has no gun-specific offset
+    anchor: rapidFireGunAnchor,
   });
   TankConfigRegistry.registerTankGun({
     id: "rapid_fire_color2",
@@ -380,6 +336,7 @@ export function initializeTankRegistry(): void {
     fireRate: 3,
     damage: 8,
     bulletSpeed: 0.9,
+    anchor: rapidFireGunAnchor,
   });
   TankConfigRegistry.registerTankGun({
     id: "rapid_fire_color3",
@@ -393,6 +350,7 @@ export function initializeTankRegistry(): void {
     fireRate: 3,
     damage: 8,
     bulletSpeed: 0.9,
+    anchor: rapidFireGunAnchor,
   });
   TankConfigRegistry.registerTankGun({
     id: "rapid_fire_color4",
@@ -406,8 +364,10 @@ export function initializeTankRegistry(): void {
     fireRate: 3,
     damage: 8,
     bulletSpeed: 0.9,
+    anchor: rapidFireGunAnchor,
   });
 
+  const balancedGunAnchor = { x: 0.5, y: 0.2 };
   // Cannon 2 - Balanced (All colors)
   TankConfigRegistry.registerTankGun({
     id: "balanced_color1",
@@ -421,7 +381,7 @@ export function initializeTankRegistry(): void {
     fireRate: 2, // Standard fire rate
     damage: 12, // Balanced damage
     bulletSpeed: 1.0,
-    gunYOffset: 10, // Y offset for gun position (adjust as needed) - Balanced has +10 offset
+    anchor: balancedGunAnchor,
   });
   TankConfigRegistry.registerTankGun({
     id: "balanced_color2",
@@ -435,6 +395,7 @@ export function initializeTankRegistry(): void {
     fireRate: 2,
     damage: 12,
     bulletSpeed: 1.0,
+    anchor: balancedGunAnchor,
   });
   TankConfigRegistry.registerTankGun({
     id: "balanced_color3",
@@ -448,6 +409,7 @@ export function initializeTankRegistry(): void {
     fireRate: 2,
     damage: 12,
     bulletSpeed: 1.0,
+    anchor: balancedGunAnchor,
   });
   TankConfigRegistry.registerTankGun({
     id: "balanced_color4",
@@ -461,8 +423,10 @@ export function initializeTankRegistry(): void {
     fireRate: 2,
     damage: 12,
     bulletSpeed: 1.0,
+    anchor: balancedGunAnchor,
   });
 
+  const heavyCannonGunAnchor = { x: 0.5, y: 0.2 };
   // Cannon 3 - Heavy Cannon (All colors)
   TankConfigRegistry.registerTankGun({
     id: "heavy_cannon_color1",
@@ -476,7 +440,7 @@ export function initializeTankRegistry(): void {
     fireRate: 1, // Slow fire rate
     damage: 20, // High damage
     bulletSpeed: 1.5, // Fast bullets
-    gunYOffset: 0, // Y offset for gun position (adjust as needed) - Heavy Cannon has no gun-specific offset
+    anchor: heavyCannonGunAnchor,
   });
   TankConfigRegistry.registerTankGun({
     id: "heavy_cannon_color2",
@@ -490,6 +454,7 @@ export function initializeTankRegistry(): void {
     fireRate: 1,
     damage: 20,
     bulletSpeed: 1.5,
+    anchor: heavyCannonGunAnchor,
   });
   TankConfigRegistry.registerTankGun({
     id: "heavy_cannon_color3",
@@ -503,6 +468,7 @@ export function initializeTankRegistry(): void {
     fireRate: 1,
     damage: 20,
     bulletSpeed: 1.5,
+    anchor: heavyCannonGunAnchor,
   });
   TankConfigRegistry.registerTankGun({
     id: "heavy_cannon_color4",
@@ -516,8 +482,10 @@ export function initializeTankRegistry(): void {
     fireRate: 1,
     damage: 20,
     bulletSpeed: 1.5,
+    anchor: heavyCannonGunAnchor,
   });
 
+  const sniperGunAnchor = { x: 0.5, y: 0.15 };
   // Cannon 4 - Sniper (All colors)
   TankConfigRegistry.registerTankGun({
     id: "sniper_color1",
@@ -531,7 +499,7 @@ export function initializeTankRegistry(): void {
     fireRate: 1.2, // Slow fire rate
     damage: 18, // High damage
     bulletSpeed: 1.1,
-    gunYOffset: 20, // Y offset for gun position (adjust as needed) - Sniper has +20 offset
+    anchor: sniperGunAnchor,
   });
   TankConfigRegistry.registerTankGun({
     id: "sniper_color2",
@@ -545,6 +513,7 @@ export function initializeTankRegistry(): void {
     fireRate: 1.2,
     damage: 18,
     bulletSpeed: 1.1,
+    anchor: sniperGunAnchor,
   });
   TankConfigRegistry.registerTankGun({
     id: "sniper_color3",
@@ -558,6 +527,7 @@ export function initializeTankRegistry(): void {
     fireRate: 1.2,
     damage: 18,
     bulletSpeed: 1.1,
+    anchor: sniperGunAnchor,
   });
   TankConfigRegistry.registerTankGun({
     id: "sniper_color4",
@@ -571,6 +541,7 @@ export function initializeTankRegistry(): void {
     fireRate: 1.2,
     damage: 18,
     bulletSpeed: 1.1,
+    anchor: sniperGunAnchor,
   });
 }
 

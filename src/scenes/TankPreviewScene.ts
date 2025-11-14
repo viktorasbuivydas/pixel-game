@@ -494,24 +494,20 @@ export class TankPreviewScene extends Scene {
       const baseName = baseConfig?.name ?? baseId;
       const gunName = gunConfig?.name ?? gunId;
 
-      // Get anchor Y offset from registry (base offset + gun offset)
-      const baseOffset = TankConfigRegistry.getGunYOffsetForBase(baseId, gunId);
-      const gunOffset = gunConfig?.gunYOffset ?? 0;
-      const totalOffset = baseOffset + gunOffset;
+      // Get gun Y offset from config if needed
+      const gunYOffset = gunConfig?.gunYOffset ?? 0;
 
       // Create gun pivot container for rotation control
       // The pivot container's origin (0,0) is where rotation happens
       const gunPivot = new Container();
 
-      // Position pivot container where we want the rotation point
-      // The exported yOffset is the total anchor Y position relative to the gun container
-      // Since tank.gun.container.y is 0 (container itself isn't moved), we can use totalOffset directly
-      // But we need to account for the fact that Tank1.create() already moved the gun sprites by totalGunYOffset
-      // So we need to position the pivot at the exported anchor Y position
+      // Position pivot container at the gun sprite's anchor point
+      // Gun container is at (0, 0) in tank container (since initialX=0, initialY=0)
+      // Gun sprite is at (0, gunYOffset) in gun container (after offset applied in Tank1)
+      // Anchor point (0.5, 0.2) is at the sprite's position, so it's at (0, gunYOffset) in gun container
+      // We position pivot at (0, gunYOffset) relative to tank container to align with anchor point
       gunPivot.x = tank.gun.container.x;
-      // Use exported anchor Y if available, otherwise use calculated offset
-      // The anchor Y is relative to the gun container's origin (which is at initialY = 0)
-      gunPivot.y = totalOffset;
+      gunPivot.y = tank.gun.container.y + gunYOffset;
 
       // Remove gun container from tank and add to pivot
       tank.container.removeChild(tank.gun.container);
@@ -520,33 +516,22 @@ export class TankPreviewScene extends Scene {
       // Add pivot container to tank
       tank.container.addChild(gunPivot);
 
-      // Set gun sprite anchor to (0, 0.5) for left-center rotation
-      tank.gun.gun.anchor.set(0, 0.5);
+      // Gun sprite already has anchor (0.5, 0.2) set in TankGunFactory
+      // The gun sprite is at (0, gunYOffset) in the gun container
+      // The pivot is positioned at (0, gunYOffset) relative to tank container
+      // When gun container is moved into pivot, it's at (0, 0) in pivot space
+      // So gun sprite is at (0, gunYOffset) in pivot space
+      // To align anchor point with pivot origin, move sprite to (0, 0) in pivot space
+      // This compensates for the pivot being offset
+      tank.gun.gun.x = 0;
+      tank.gun.gun.y = 0; // Anchor point will be at pivot origin (0, 0)
       if (tank.gun.gunBase) {
-        tank.gun.gunBase.anchor.set(0, 0.5);
+        tank.gun.gunBase.x = 0;
+        tank.gun.gunBase.y = 0;
       }
       if (tank.gun.fireAnimation) {
-        tank.gun.fireAnimation.anchor.set(0, 0.5);
-      }
-
-      // Position gun sprites within gun container to align pivot point
-      // Calculate default pivot offsets based on gun width
-      const gunWidth = tank.gun.gun.width;
-      const initialXOffset = -gunWidth * 0.5; // Center the gun horizontally
-      const initialYOffset = 0; // No vertical offset initially
-
-      // Set gun sprite positions within pivot container
-      // The gun sprites were initially at (0, 0) with anchor (0.5, 0.5), then moved by totalGunYOffset
-      // Now we're setting them to the calculated pivot offset positions with anchor (0, 0.5)
-      tank.gun.gun.x = initialXOffset;
-      tank.gun.gun.y = initialYOffset;
-      if (tank.gun.gunBase) {
-        tank.gun.gunBase.x = initialXOffset;
-        tank.gun.gunBase.y = initialYOffset;
-      }
-      if (tank.gun.fireAnimation) {
-        tank.gun.fireAnimation.x = initialXOffset;
-        tank.gun.fireAnimation.y = initialYOffset;
+        tank.gun.fireAnimation.x = 0;
+        tank.gun.fireAnimation.y = 0;
       }
 
       // Add tank to scroll container
@@ -583,9 +568,9 @@ export class TankPreviewScene extends Scene {
         baseName: baseName,
         gunName: gunName,
         initialY: 0,
-        currentYOffset: totalOffset,
-        xOffset: initialXOffset,
-        yOffset: initialYOffset,
+        currentYOffset: 0,
+        xOffset: 0,
+        yOffset: 0,
         tankContainerX: tankContainerX,
         tankContainerY: tankContainerY,
       };
@@ -680,7 +665,7 @@ export class TankPreviewScene extends Scene {
         align: "center",
       });
       const infoText = new Text({
-        text: `Base: ${baseOffset} | Gun: ${gunOffset} | Total: ${totalOffset} | X: ${initialXOffset.toFixed(1)} | Y: ${initialYOffset.toFixed(1)}`,
+        text: `${baseName} + ${gunName}`,
         style: infoStyle,
       });
       infoText.anchor.set(0.5);
@@ -880,16 +865,8 @@ export class TankPreviewScene extends Scene {
       // Update info text
       const infoText = (this.selectedPreview as any).infoText as Text;
       if (infoText) {
-        const baseOffset = TankConfigRegistry.getGunYOffsetForBase(
-          this.selectedPreview.baseId,
-          this.selectedPreview.gunId
-        );
-        const gunConfig = TankConfigRegistry.getTankGun(
-          this.selectedPreview.gunId
-        );
-        const gunOffset = gunConfig?.gunYOffset ?? 0;
         const modeText = this.dragMode === "sprite" ? "SPRITE" : "ANCHOR";
-        infoText.text = `[${modeText}] Base: ${baseOffset} | Gun: ${gunOffset} | X: ${this.selectedPreview.xOffset.toFixed(1)} | Y: ${this.selectedPreview.yOffset.toFixed(1)}`;
+        infoText.text = `[${modeText}] X: ${this.selectedPreview.xOffset.toFixed(1)} | Y: ${this.selectedPreview.yOffset.toFixed(1)}`;
       }
     };
 
@@ -918,16 +895,8 @@ export class TankPreviewScene extends Scene {
         baseConfig?.baseTextureUrl.split("/").pop()?.replace(".png", "") ??
         "unknown";
       const gunName = preview.gunName;
-      const yOffset = preview.currentYOffset;
       const xOffset = preview.xOffset;
       const yPivotOffset = preview.yOffset;
-
-      // Get all tank information
-      const baseOffset = TankConfigRegistry.getGunYOffsetForBase(
-        preview.baseId,
-        preview.gunId
-      );
-      const gunOffset = gunConfig?.gunYOffset ?? 0;
       const baseSpeed = baseConfig?.speed ?? 1.0;
       const gunRange = gunConfig?.range ?? 1000;
       const gunFireRate = gunConfig?.fireRate ?? 2;
@@ -941,14 +910,10 @@ export class TankPreviewScene extends Scene {
         baseId: preview.baseId,
         gunId: preview.gunId,
         baseName: preview.baseName,
-        yOffset: parseFloat(yOffset.toFixed(2)),
         baseConfig: {
-          gunYOffset: baseOffset, // Current offset for this gun
-          gunYOffsets: baseConfig?.gunYOffsets, // All per-gun offsets (if exists)
           speed: baseSpeed,
         },
         gunConfig: {
-          gunYOffset: gunOffset,
           range: gunRange,
           fireRate: gunFireRate,
           damage: gunDamage,
