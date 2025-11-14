@@ -80,6 +80,7 @@ export class PlayerMovement {
   private tankSprite: Sprite;
   private tankGunSprite: Sprite;
   private frontArrow: Graphics; // Arrow indicator showing tank front direction
+  private gunYOffset: number = 0; // Y offset for gun position relative to tank base
 
   // -- Realistic tank mass (kg) and power (watts) --
   private _tankMassKg: number = 32000; // Example: 32,000 kg (T-90 MBT)
@@ -138,6 +139,7 @@ export class PlayerMovement {
     options?: {
       tankRotateSpeed?: number;
       turretRotateSpeed?: number;
+      gunYOffset?: number; // Y offset for gun position relative to tank base
       // For realism, set these (optional, will use defaults if not provided)
       massKg?: number;
       powerW?: number;
@@ -148,6 +150,7 @@ export class PlayerMovement {
     this.tankGunSprite = tankGunSprite;
     this.lastGunAngle = tankGunSprite.rotation;
     this.worldBounds = worldBounds || null;
+    this.gunYOffset = options?.gunYOffset ?? 0;
     this.setupMouseTracking();
     this.lastSpriteRotation = tankSprite.rotation;
 
@@ -441,47 +444,27 @@ export class PlayerMovement {
       mouseWorld = { x: tmp.x, y: tmp.y };
     }
 
-    // Move the gun together with the tank base
+    // Move the gun together with the tank base, with Y offset for different tank heights
     this.tankGunSprite.x = this.tankSprite.x;
-    this.tankGunSprite.y = this.tankSprite.y;
+    this.tankGunSprite.y = this.tankSprite.y + this.gunYOffset;
 
     // Update front arrow position and rotation
     this.updateFrontArrow();
 
-    // Aim tank's gun at mouse (with correct parent offset)
+    // Aim tank's gun directly at mouse - no smoothing, always follows mouse
     const dxGun = mouseWorld.x - this.tankGunSprite.x;
     const dyGun = mouseWorld.y - this.tankGunSprite.y;
 
-    // Compute angle so "up" is forward (aligns with tank), with smooth wrap
-    let desiredGunAngle = clampAngle(
-      Math.atan2(dyGun, dxGun) + (90 * Math.PI) / 180
-    );
+    // Compute angle so "up" is forward (aligns with tank)
+    // Math.atan2 gives angle where 0 points right, PixiJS rotation 0 points up
+    // So we subtract Math.PI/2 to convert from atan2 to PixiJS rotation
+    let desiredGunAngle = Math.atan2(dyGun, dxGun) - Math.PI / 2;
 
-    // Smoothly interpolate tankGunSprite.rotation toward desiredGunAngle using turretRotateSpeed
-    let gunRotatedThisFrame = false;
-    let gunCurrent = clampAngle(this.tankGunSprite.rotation);
-    let gunTarget = clampAngle(desiredGunAngle);
+    // Directly set rotation to follow mouse - no interpolation or speed limits
+    this.tankGunSprite.rotation = desiredGunAngle;
+    this.lastGunAngle = desiredGunAngle;
 
-    // Find shortest angular difference (wrap)
-    let gunDiff = clampAngle(gunTarget - gunCurrent);
-
-    if (Math.abs(gunDiff) > 1e-4) {
-      // Turret rotation ratio for this frame
-      let maxStep =
-        this.turretRotateSpeed * this.gunRotationSpeedMultiplier * delta;
-      if (Math.abs(gunDiff) < maxStep) {
-        // Snap to final
-        this.tankGunSprite.rotation = gunTarget;
-        this.lastGunAngle = gunTarget;
-      } else {
-        // Move toward target by maxStep, keeping correct sign/direction
-        this.tankGunSprite.rotation = clampAngle(
-          gunCurrent + maxStep * Math.sign(gunDiff)
-        );
-        this.lastGunAngle = this.tankGunSprite.rotation;
-      }
-      gunRotatedThisFrame = true;
-    }
+    let gunRotatedThisFrame = true; // Always consider it rotated since we're updating it
 
     // Emit rotation state change if needed (true if tank OR gun rotated)
     let rotating = rotatedThisFrame || gunRotatedThisFrame;

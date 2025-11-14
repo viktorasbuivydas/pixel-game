@@ -4,6 +4,12 @@ import { SceneManager } from "../core/SceneManager";
 import { MainScene } from "./MainScene";
 import { TankConfigRegistry } from "../core/tanks/TankConfig";
 import { Tank1 } from "../core/tanks/Tank1";
+import { CookieUtils } from "../core/CookieUtils";
+import { TankPreviewScene } from "./TankPreviewScene";
+import {
+  getTankBaseIdFromIndex,
+  getGunIdFromIndex,
+} from "../core/tanks/TankUniqueIds";
 
 export interface TankSelection {
   colorIndex: number; // 1-4
@@ -20,6 +26,7 @@ export class TankSelectionScene extends Scene {
   private previewTank: Container | null = null;
   private infoText!: Text;
   private startButton: Container | null = null;
+  private previewButton: Container | null = null;
   private screenWidth: number = 0;
   private screenHeight: number = 0;
 
@@ -58,6 +65,7 @@ export class TankSelectionScene extends Scene {
     this.createGunSelection();
     this.createInfoSection();
     this.createStartButton();
+    this.createPreviewButton();
 
     // Create preview
     await this.updatePreview();
@@ -350,8 +358,11 @@ export class TankSelectionScene extends Scene {
   }
 
   private updateInfo(): void {
-    const baseId = `tank${this.selectedBase}_color${this.selectedColor}`;
-    const gunId = `cannon${this.selectedGun}_color${this.selectedColor}`;
+    const baseId = getTankBaseIdFromIndex(
+      this.selectedBase,
+      this.selectedColor
+    );
+    const gunId = getGunIdFromIndex(this.selectedGun, this.selectedColor);
 
     const baseConfig = TankConfigRegistry.getTankBase(baseId);
     const gunConfig = TankConfigRegistry.getTankGun(gunId);
@@ -386,15 +397,18 @@ export class TankSelectionScene extends Scene {
       this.previewTank = null;
     }
 
-    const baseId = `tank${this.selectedBase}_color${this.selectedColor}`;
-    const gunId = `cannon${this.selectedGun}_color${this.selectedColor}`;
+    const baseId = getTankBaseIdFromIndex(
+      this.selectedBase,
+      this.selectedColor
+    );
+    const gunId = getGunIdFromIndex(this.selectedGun, this.selectedColor);
 
     try {
       const tank = await Tank1.create({
         baseId: baseId,
         gunId: gunId,
         initialX: this.screenWidth / 2,
-        initialY: this.screenHeight / 2 + 100,
+        initialY: this.screenHeight / 2 + 50,
         scale: 0.6, // Larger preview
       });
 
@@ -476,6 +490,37 @@ export class TankSelectionScene extends Scene {
     this.addChild(this.startButton);
   }
 
+  private createPreviewButton(): void {
+    const buttonTextStyle = new TextStyle({
+      fontFamily: "Arial",
+      fontSize: 18,
+      fill: 0xffffff,
+      align: "center",
+    });
+
+    const buttonWidth = 180;
+    const buttonHeight = 50;
+    const buttonCorner = 12;
+
+    this.previewButton = this.createButton(
+      this.screenWidth - buttonWidth / 2 - 20,
+      this.screenHeight - 80,
+      buttonWidth,
+      buttonHeight,
+      buttonCorner,
+      "PREVIEW ALL",
+      buttonTextStyle,
+      0x666666,
+      0x777777,
+      () => {
+        const previewScene = new TankPreviewScene();
+        previewScene.initialize();
+        SceneManager.changeScene(previewScene);
+      }
+    );
+    this.addChild(this.previewButton);
+  }
+
   private createButton(
     x: number,
     y: number,
@@ -528,23 +573,31 @@ export class TankSelectionScene extends Scene {
     return buttonContainer;
   }
 
-  private startGame(): void {
-    const selection: TankSelection = {
-      colorIndex: this.selectedColor,
-      baseIndex: this.selectedBase,
-      gunIndex: this.selectedGun,
-    };
+  private async startGame(): Promise<void> {
+    try {
+      const selection: TankSelection = {
+        colorIndex: this.selectedColor,
+        baseIndex: this.selectedBase,
+        gunIndex: this.selectedGun,
+      };
 
-    // Save selection to cookie
-    const selectionJson = JSON.stringify(selection);
-    const CookieUtils = require("../core/CookieUtils").CookieUtils;
-    CookieUtils.set("tankSelection", selectionJson);
+      // Save selection to cookie
+      const selectionJson = JSON.stringify(selection);
+      CookieUtils.set("tankSelection", selectionJson);
 
-    // Transition to MainScene with selection
-    const mainScene = new MainScene();
-    (mainScene as any).tankSelection = selection; // Pass selection to MainScene
-    mainScene.initialize();
-    SceneManager.changeScene(mainScene);
+      // Transition to MainScene with selection
+      const mainScene = new MainScene();
+      mainScene.tankSelection = selection; // Pass selection to MainScene
+
+      // Initialize the main scene (this is async)
+      await mainScene.initialize();
+
+      // Change to the main scene after initialization completes
+      SceneManager.changeScene(mainScene);
+    } catch (error) {
+      console.error("Error starting game:", error);
+      // Optionally show an error message to the user
+    }
   }
 
   update(_deltaTime: number): void {

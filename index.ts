@@ -3,6 +3,7 @@ import { initDevtools } from "@pixi/devtools";
 import { SceneManager } from "./src/core/SceneManager";
 import { SignInScene } from "./src/scenes/SignInScene";
 import { initializeTankRegistry } from "./src/core/tanks/TankRegistry";
+import { TankPreviewScene } from "@/scenes/TankPreviewScene";
 
 // Initialize tank registry at startup
 initializeTankRegistry();
@@ -29,9 +30,12 @@ initializeTankRegistry();
   document.body.appendChild(app.canvas);
 
   // Initialize and show sign-in scene
-  const signInScene = new SignInScene();
-  signInScene.initialize();
-  SceneManager.changeScene(signInScene);
+  // const signInScene = new SignInScene();
+  // signInScene.initialize();
+  // SceneManager.changeScene(signInScene);
+  const tankPreviewScene = new TankPreviewScene();
+  tankPreviewScene.initialize();
+  SceneManager.changeScene(tankPreviewScene);
 
   // Game loop - update current scene
   app.ticker.add((time) => {

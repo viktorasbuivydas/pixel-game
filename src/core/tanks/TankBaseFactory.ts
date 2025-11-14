@@ -1,5 +1,5 @@
 import { Assets, Sprite, AnimatedSprite, Container } from "pixi.js";
-import { TankBaseConfig, TankConfigRegistry } from "./TankConfig";
+import { TankConfigRegistry } from "./TankConfig";
 
 export interface TankBaseSprites {
   base: Sprite | AnimatedSprite; // Main tank base sprite
@@ -29,7 +29,7 @@ export class TankBaseFactory {
     }
 
     const container = new Container();
-    const scale = config.scale ?? baseConfig.scale ?? 1.0;
+    // Scale is not applied - sprites use their natural size
 
     // Load and create main tank base sprite
     const baseTexture = await Assets.load(baseConfig.baseTextureUrl);
@@ -50,7 +50,7 @@ export class TankBaseFactory {
       baseSprite = new Sprite(baseTexture);
     }
 
-    baseSprite.scale.set(scale, scale);
+    baseSprite.scale.set(1.0, 1.0); // No scaling applied
     baseSprite.x = config.initialX;
     baseSprite.y = config.initialY;
     baseSprite.anchor.set(0.5);
@@ -59,7 +59,7 @@ export class TankBaseFactory {
     // Load and create dead tank base sprite
     const deadTexture = await Assets.load(baseConfig.deadTextureUrl);
     const deadSprite = new Sprite(deadTexture);
-    deadSprite.scale.set(scale, scale);
+    deadSprite.scale.set(1.0, 1.0); // No scaling applied
     deadSprite.x = config.initialX;
     deadSprite.y = config.initialY;
     deadSprite.anchor.set(0.5);

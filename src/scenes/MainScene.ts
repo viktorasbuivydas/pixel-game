@@ -261,9 +261,32 @@ export class MainScene extends Scene {
 
     // Example: Join or create a room, and handle players
     try {
-      // Join room with username in options
+      // Get tank selection from cookie or passed property
+      let selection: TankSelection | null = null;
+      if (this.tankSelection) {
+        selection = this.tankSelection;
+      } else {
+        const selectionJson = CookieUtils.get("tankSelection");
+        if (selectionJson) {
+          try {
+            selection = JSON.parse(selectionJson);
+          } catch (e) {
+            console.error("Failed to parse tank selection:", e);
+          }
+        }
+      }
+
+      // Default selection if none found
+      if (!selection) {
+        selection = { colorIndex: 1, baseIndex: 1, gunIndex: 1 };
+      }
+
+      // Join room with username and tank selection in options
       const room = await this.multiplayer.joinOrCreate("my_room", {
         username: this.username,
+        colorIndex: selection.colorIndex,
+        baseIndex: selection.baseIndex,
+        gunIndex: selection.gunIndex,
       });
       console.log(
         "Connected to room:",
@@ -275,6 +298,9 @@ export class MainScene extends Scene {
 
       // Send username to server immediately after joining
       this.multiplayer.sendUsername(this.username, room.sessionId);
+
+      // Send tank selection to server immediately after joining
+      this.multiplayer.sendTankSelection(selection, room.sessionId);
 
       // Setup ping listener
       this.multiplayer.onPingUpdate((latency, _timeOffset) => {
@@ -398,12 +424,14 @@ export class MainScene extends Scene {
           this.ui.setKills(player.kills || 0);
         }
 
-        // Create tank - use Tank1 for current player, TankFactory for others
+        // Create tank - use Tank1 for all players with their selected configuration
         let entity: any;
 
+        // Get tank selection from player state (from backend) or local cookie/passed property
+        let selection: TankSelection | null = null;
+
         if (sessionId === this.currentSessionId) {
-          // Get tank selection from cookie or passed property
-          let selection: TankSelection | null = null;
+          // For current player, get from cookie or passed property
           if (this.tankSelection) {
             selection = this.tankSelection;
           } else {
@@ -416,26 +444,50 @@ export class MainScene extends Scene {
               }
             }
           }
-
-          // Default selection if none found
-          if (!selection) {
-            selection = { colorIndex: 1, baseIndex: 1, gunIndex: 1 };
+        } else {
+          // For other players, get from backend player state
+          if (
+            (player as any).colorIndex &&
+            (player as any).baseIndex &&
+            (player as any).gunIndex
+          ) {
+            selection = {
+              colorIndex: (player as any).colorIndex,
+              baseIndex: (player as any).baseIndex,
+              gunIndex: (player as any).gunIndex,
+            };
           }
+        }
 
-          // Create tank using Tank1 with selected configuration
-          const baseId = `tank${selection.baseIndex}_color${selection.colorIndex}`;
-          const gunId = `cannon${selection.gunIndex}_color${selection.colorIndex}`;
+        // Default selection if none found
+        if (!selection) {
+          selection = { colorIndex: 1, baseIndex: 1, gunIndex: 1 };
+        }
 
-          const tank1Entity = await Tank1.create({
-            baseId: baseId,
-            gunId: gunId,
-            initialX: player.x || 100,
-            initialY: player.y || 100,
-            scale: 0.25,
-            username: playerUsername,
-          });
+        // Create tank using Tank1 with selected configuration
+        const { getTankBaseIdFromIndex, getGunIdFromIndex } = await import(
+          "../core/tanks/TankUniqueIds"
+        );
+        const baseId = getTankBaseIdFromIndex(
+          selection.baseIndex,
+          selection.colorIndex
+        );
+        const gunId = getGunIdFromIndex(
+          selection.gunIndex,
+          selection.colorIndex
+        );
 
-          // Get gun stats and update GunManager
+        const tank1Entity = await Tank1.create({
+          baseId: baseId,
+          gunId: gunId,
+          initialX: player.x || 100,
+          initialY: player.y || 100,
+          scale: 0.25,
+          username: playerUsername,
+        });
+
+        // Get gun stats and update GunManager (only for current player)
+        if (sessionId === this.currentSessionId) {
           const gunStats = Tank1.getGunStats(tank1Entity);
           this.gunManager.updateConfig({
             damage: gunStats.damage,
@@ -445,30 +497,20 @@ export class MainScene extends Scene {
               gunStats.range / (8 * gunStats.bulletSpeed)
             ), // Calculate lifetime from range
           });
-
-          // Convert Tank1 format to match TankFactory format for compatibility
-          entity = {
-            body: tank1Entity.base.base,
-            gun: tank1Entity.gun.gun,
-            container: tank1Entity.container,
-            usernameLabel: tank1Entity.usernameLabel,
-            healthBar: tank1Entity.healthBar,
-            healthBarBackground: tank1Entity.healthBarBackground,
-          };
-
-          // Store Tank1 entity for later use
-          (entity as any).tank1Entity = tank1Entity;
-        } else {
-          // Use TankFactory for other players
-          entity = await TankFactory.create({
-            bodyTextureUrl: tankBody,
-            gunTextureUrl: tankGun,
-            scale: 0.25,
-            initialX: player.x || 100,
-            initialY: player.y || 100,
-            username: playerUsername,
-          });
         }
+
+        // Convert Tank1 format to match TankFactory format for compatibility
+        entity = {
+          body: tank1Entity.base.base,
+          gun: tank1Entity.gun.gun,
+          container: tank1Entity.container,
+          usernameLabel: tank1Entity.usernameLabel,
+          healthBar: tank1Entity.healthBar,
+          healthBarBackground: tank1Entity.healthBarBackground,
+        };
+
+        // Store Tank1 entity for later use
+        (entity as any).tank1Entity = tank1Entity;
 
         // Create minimap for *this* client only, when *our own* entity is created
         if (sessionId === this.currentSessionId) {
@@ -487,8 +529,9 @@ export class MainScene extends Scene {
         // Sprites are at world positions, container is just a grouping
         entity.body.x = player.x || 100;
         entity.body.y = player.y || 100;
+        const gunYOffset = (entity as any).tank1Entity?.gunYOffset ?? 0;
         entity.gun.x = entity.body.x;
-        entity.gun.y = entity.body.y;
+        entity.gun.y = entity.body.y + gunYOffset;
 
         // Store entity
         this.playerEntities[sessionId] = entity;
@@ -536,11 +579,19 @@ export class MainScene extends Scene {
 
           // Init player movement for our own tank
           if (this.tankSprite && this.tankGunSprite) {
+            // Get gun Y offset from Tank1 entity if available
+            const gunYOffset = (entity as any).tank1Entity?.gunYOffset ?? 0;
+
             this.playerMovement = new PlayerMovement(
               app,
               this.tankSprite,
               this.tankGunSprite,
-              worldBounds
+              worldBounds,
+              {
+                tankRotateSpeed: 0.09,
+                turretRotateSpeed: 0.1,
+                gunYOffset: gunYOffset,
+              }
             );
           }
 
@@ -658,8 +709,8 @@ export class MainScene extends Scene {
                   this.tankGunSprite.y = player.y;
                   if (this.playerMovement) {
                     (this.playerMovement as any).tankAngle = player.rotation;
-                    (this.playerMovement as any).tankGunSprite.rotation =
-                      player.gunRotation;
+                    // Don't override gun rotation for current player - let PlayerMovement handle it from mouse
+                    // (this.playerMovement as any).tankGunSprite.rotation = player.gunRotation;
                   }
                 } else if (predictionError > 5) {
                   // Smooth correction for small errors
@@ -829,8 +880,9 @@ export class MainScene extends Scene {
       // Update interpolated positions
       entity.body.x = interp.fromX + (interp.toX - interp.fromX) * t;
       entity.body.y = interp.fromY + (interp.toY - interp.fromY) * t;
+      const gunYOffset = (entity as any).tank1Entity?.gunYOffset ?? 0;
       entity.gun.x = entity.body.x;
-      entity.gun.y = entity.body.y;
+      entity.gun.y = entity.body.y + gunYOffset;
 
       // Angular interpolation
       const rotDiff =
@@ -1070,8 +1122,10 @@ export class MainScene extends Scene {
             botData.entity.body.x = pos.x;
             botData.entity.body.y = pos.y;
             botData.entity.body.rotation = botData.ai.getRotation();
+            const botGunYOffset =
+              (botData.entity as any).tank1Entity?.gunYOffset ?? 0;
             botData.entity.gun.x = pos.x;
-            botData.entity.gun.y = pos.y;
+            botData.entity.gun.y = pos.y + botGunYOffset;
             botData.entity.gun.rotation = botData.ai.getGunRotation();
           } else {
             // Get position without updating AI (for UI positioning)
@@ -1486,8 +1540,9 @@ export class MainScene extends Scene {
       // Set initial position
       entity.body.x = randomX;
       entity.body.y = randomY;
+      const botGunYOffset = (entity as any).tank1Entity?.gunYOffset ?? 0;
       entity.gun.x = randomX;
-      entity.gun.y = randomY;
+      entity.gun.y = randomY + botGunYOffset;
 
       // Store bot ID on sprite for self-identification
       (entity.body as any).botId = botId;

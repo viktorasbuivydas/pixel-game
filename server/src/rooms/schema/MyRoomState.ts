@@ -10,6 +10,9 @@ export class Player extends Schema {
   @type("number") speed: number;
   @type("number") health: number;
   @type("number") kills: number = 0;
+  @type("number") colorIndex: number = 1;
+  @type("number") baseIndex: number = 1;
+  @type("number") gunIndex: number = 1;
 }
 
 export class MyRoomState extends Schema {

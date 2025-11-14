@@ -286,6 +286,32 @@ export class Multiplayer {
   }
 
   /**
+   * Send tank selection to the server
+   */
+  sendTankSelection(
+    selection: { colorIndex: number; baseIndex: number; gunIndex: number },
+    sessionId?: string
+  ): void {
+    if (!this.room) {
+      return;
+    }
+    if (!this.isConnected()) {
+      return; // Silently skip if connection is closed
+    }
+    // Send tank selection with sessionId to the server
+    try {
+      this.room.send("set-tank-selection", {
+        colorIndex: selection.colorIndex,
+        baseIndex: selection.baseIndex,
+        gunIndex: selection.gunIndex,
+        sessionId: sessionId || this.getSessionId() || "",
+      });
+    } catch (error) {
+      console.warn("Error sending tank selection:", error);
+    }
+  }
+
+  /**
    * Send player movement input (position/rotation/gunRotation) to the server
    */
   sendPlayerInput(

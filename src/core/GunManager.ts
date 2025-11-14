@@ -108,7 +108,8 @@ export class GunManager {
 
     // Calculate bullet direction from gun rotation
     // Gun rotation is in radians, with 0 pointing up (in PixiJS)
-    const bulletAngle = gunRotation - Math.PI / 2; // Convert to standard angle
+    // To convert back to standard angle (0 = right), we add Math.PI/2
+    const bulletAngle = gunRotation + Math.PI / 2; // Convert to standard angle
     const bulletSpeed = this.config.bulletSpeed * this.bulletSpeedMultiplier;
     const vx = Math.cos(bulletAngle) * bulletSpeed;
     const vy = Math.sin(bulletAngle) * bulletSpeed;

@@ -35,6 +35,25 @@ export class MyRoom extends Room<MyRoomState> {
       }
     });
 
+    // Handle tank selection updates
+    this.onMessage("set-tank-selection", (client, message) => {
+      const player = this.state.players.get(client.id);
+      if (
+        player &&
+        typeof message.colorIndex === "number" &&
+        typeof message.baseIndex === "number" &&
+        typeof message.gunIndex === "number"
+      ) {
+        player.colorIndex = message.colorIndex;
+        player.baseIndex = message.baseIndex;
+        player.gunIndex = message.gunIndex;
+        player.sessionId = client.sessionId;
+        console.log(
+          `Player ${client.sessionId} set tank selection: color=${player.colorIndex}, base=${player.baseIndex}, gun=${player.gunIndex}`
+        );
+      }
+    });
+
     // Handle shooting events - broadcast to all clients
     this.onMessage("shoot", (client, message) => {
       // Broadcast the shooting event to all clients in the room
@@ -150,6 +169,15 @@ export class MyRoom extends Room<MyRoomState> {
     player.gunRotation = 0;
     player.speed = 0;
     player.kills = 0; // Initialize kills to 0
+
+    // Set tank selection from options (defaults to 1 if not provided)
+    player.colorIndex = options?.colorIndex ?? 1;
+    player.baseIndex = options?.baseIndex ?? 1;
+    player.gunIndex = options?.gunIndex ?? 1;
+
+    console.log(
+      `Player ${client.sessionId} joined with tank selection: color=${player.colorIndex}, base=${player.baseIndex}, gun=${player.gunIndex}`
+    );
 
     // player.x = (Math.random() * mapWidth);
     // player.y = (Math.random() * mapHeight);
