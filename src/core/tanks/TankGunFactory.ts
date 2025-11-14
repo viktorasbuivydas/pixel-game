@@ -59,7 +59,9 @@ export class TankGunFactory {
       gunSprite = new Sprite(gunTexture);
     }
 
-    gunSprite.scale.set(1.0, 1.0); // No scaling applied
+    // Apply scale if provided
+    const scale = config.scale ?? 1.0;
+    gunSprite.scale.set(scale, scale);
     gunSprite.x = config.initialX;
     gunSprite.y = config.initialY;
     gunSprite.anchor.set(0.5);
@@ -72,7 +74,7 @@ export class TankGunFactory {
     if (gunConfig.gunBaseTextureUrl) {
       const gunBaseTexture = await Assets.load(gunConfig.gunBaseTextureUrl);
       gunBaseSprite = new Sprite(gunBaseTexture);
-      gunBaseSprite.scale.set(1.0, 1.0); // No scaling applied
+      gunBaseSprite.scale.set(scale, scale);
       gunBaseSprite.x = config.initialX;
       gunBaseSprite.y = config.initialY;
       gunBaseSprite.anchor.set(0.5);
@@ -92,7 +94,7 @@ export class TankGunFactory {
       fireAnimation.animationSpeed = 0.2;
       fireAnimation.loop = false; // Fire animation should play once
       fireAnimation.visible = false; // Hidden by default
-      fireAnimation.scale.set(1.0, 1.0); // No scaling applied
+      fireAnimation.scale.set(scale, scale);
       fireAnimation.anchor.set(0.5);
       fireAnimation.x = config.initialX;
       fireAnimation.y = config.initialY;

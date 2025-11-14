@@ -26,6 +26,8 @@ export class TankPreviewScene extends Scene {
   private titleText!: Text;
   private backButton!: Container;
   private exportButton!: Container;
+  private spriteModeButton!: Container;
+  private anchorModeButton!: Container;
   private screenWidth: number = 0;
   private screenHeight: number = 0;
   private tankContainers: Container[] = [];
@@ -38,6 +40,10 @@ export class TankPreviewScene extends Scene {
   private dragStartY: number = 0;
   private dragStartXOffset: number = 0;
   private dragStartYOffset: number = 0;
+  private dragMode: "sprite" | "anchor" | null = null; // Current drag mode
+  private keys: Set<string> = new Set(); // Track pressed keys
+  private mousePosition: { x: number; y: number } = { x: 0, y: 0 }; // Track mouse position
+  private movementSpeed: number = 2; // Pixels per frame
 
   async initialize(): Promise<void> {
     const app = window.app;
@@ -77,6 +83,9 @@ export class TankPreviewScene extends Scene {
     // Create export button
     this.createExportButton();
 
+    // Create mode toggle buttons
+    this.createModeButtons();
+
     // Load and display all tank combinations
     await this.createAllTankPreviews();
 
@@ -85,6 +94,9 @@ export class TankPreviewScene extends Scene {
 
     // Setup drag handlers
     this.setupDragHandlers();
+
+    // Setup keyboard and mouse input
+    this.setupInputHandlers();
   }
 
   private createBackButton(): void {
@@ -195,6 +207,207 @@ export class TankPreviewScene extends Scene {
     this.addChild(this.exportButton);
   }
 
+  private createModeButtons(): void {
+    const buttonWidth = 180;
+    const buttonHeight = 50;
+    const buttonCorner = 8;
+    const buttonSpacing = 10;
+
+    // Sprite Mode Button
+    const spriteButtonGraphics = new Graphics();
+    spriteButtonGraphics.roundRect(
+      0,
+      0,
+      buttonWidth,
+      buttonHeight,
+      buttonCorner
+    );
+    spriteButtonGraphics.fill(0x4a90e2);
+    spriteButtonGraphics.stroke({ width: 2, color: 0xffffff });
+
+    const spriteButtonTextStyle = new TextStyle({
+      fontFamily: "Arial",
+      fontSize: 18,
+      fill: 0xffffff,
+      align: "center",
+      fontWeight: "bold",
+    });
+    const spriteButtonText = new Text({
+      text: "SPRITE MODE",
+      style: spriteButtonTextStyle,
+    });
+    spriteButtonText.anchor.set(0.5);
+    spriteButtonText.x = buttonWidth / 2;
+    spriteButtonText.y = buttonHeight / 2;
+
+    this.spriteModeButton = new Container();
+    this.spriteModeButton.addChild(spriteButtonGraphics);
+    this.spriteModeButton.addChild(spriteButtonText);
+    this.spriteModeButton.x =
+      this.screenWidth / 2 - buttonWidth - buttonSpacing / 2;
+    this.spriteModeButton.y = 20;
+    this.spriteModeButton.eventMode = "static";
+    this.spriteModeButton.cursor = "pointer";
+
+    this.spriteModeButton.on("pointerdown", () => {
+      // Toggle: if already in sprite mode, turn off; otherwise set to sprite mode
+      this.setGlobalMode(this.dragMode === "sprite" ? null : "sprite");
+    });
+
+    this.spriteModeButton.on("pointerenter", () => {
+      spriteButtonGraphics.clear();
+      spriteButtonGraphics.roundRect(
+        0,
+        0,
+        buttonWidth,
+        buttonHeight,
+        buttonCorner
+      );
+      spriteButtonGraphics.fill(0x5aa0f2);
+      spriteButtonGraphics.stroke({ width: 2, color: 0xffffff });
+    });
+
+    this.spriteModeButton.on("pointerleave", () => {
+      const isActive = this.dragMode === "sprite";
+      spriteButtonGraphics.clear();
+      spriteButtonGraphics.roundRect(
+        0,
+        0,
+        buttonWidth,
+        buttonHeight,
+        buttonCorner
+      );
+      spriteButtonGraphics.fill(isActive ? 0x00ff00 : 0x4a90e2);
+      spriteButtonGraphics.stroke({ width: 2, color: 0xffffff });
+    });
+
+    // Anchor Mode Button
+    const anchorButtonGraphics = new Graphics();
+    anchorButtonGraphics.roundRect(
+      0,
+      0,
+      buttonWidth,
+      buttonHeight,
+      buttonCorner
+    );
+    anchorButtonGraphics.fill(0x4a90e2);
+    anchorButtonGraphics.stroke({ width: 2, color: 0xffffff });
+
+    const anchorButtonTextStyle = new TextStyle({
+      fontFamily: "Arial",
+      fontSize: 18,
+      fill: 0xffffff,
+      align: "center",
+      fontWeight: "bold",
+    });
+    const anchorButtonText = new Text({
+      text: "ANCHOR MODE",
+      style: anchorButtonTextStyle,
+    });
+    anchorButtonText.anchor.set(0.5);
+    anchorButtonText.x = buttonWidth / 2;
+    anchorButtonText.y = buttonHeight / 2;
+
+    this.anchorModeButton = new Container();
+    this.anchorModeButton.addChild(anchorButtonGraphics);
+    this.anchorModeButton.addChild(anchorButtonText);
+    this.anchorModeButton.x = this.screenWidth / 2 + buttonSpacing / 2;
+    this.anchorModeButton.y = 20;
+    this.anchorModeButton.eventMode = "static";
+    this.anchorModeButton.cursor = "pointer";
+
+    this.anchorModeButton.on("pointerdown", () => {
+      // Toggle: if already in anchor mode, turn off; otherwise set to anchor mode
+      this.setGlobalMode(this.dragMode === "anchor" ? null : "anchor");
+    });
+
+    this.anchorModeButton.on("pointerenter", () => {
+      anchorButtonGraphics.clear();
+      anchorButtonGraphics.roundRect(
+        0,
+        0,
+        buttonWidth,
+        buttonHeight,
+        buttonCorner
+      );
+      anchorButtonGraphics.fill(0x5aa0f2);
+      anchorButtonGraphics.stroke({ width: 2, color: 0xffffff });
+    });
+
+    this.anchorModeButton.on("pointerleave", () => {
+      const isActive = this.dragMode === "anchor";
+      anchorButtonGraphics.clear();
+      anchorButtonGraphics.roundRect(
+        0,
+        0,
+        buttonWidth,
+        buttonHeight,
+        buttonCorner
+      );
+      anchorButtonGraphics.fill(isActive ? 0x0000ff : 0x4a90e2);
+      anchorButtonGraphics.stroke({ width: 2, color: 0xffffff });
+    });
+
+    // Store graphics references for updating
+    (this.spriteModeButton as any).graphics = spriteButtonGraphics;
+    (this.anchorModeButton as any).graphics = anchorButtonGraphics;
+
+    this.addChild(this.spriteModeButton);
+    this.addChild(this.anchorModeButton);
+  }
+
+  private setGlobalMode(mode: "sprite" | "anchor" | null): void {
+    this.dragMode = mode;
+
+    // Update all dots to reflect the global mode
+    for (const preview of this.tankPreviews) {
+      const dot = preview.anchorDot;
+      dot.clear();
+
+      if (mode === "sprite") {
+        // Green for sprite mode
+        dot.circle(0, 0, 10);
+        dot.fill(0x00ff00);
+        dot.stroke({ width: 3, color: 0xffffff });
+        (preview as any).dotState = "green";
+      } else if (mode === "anchor") {
+        // Blue for anchor mode
+        dot.circle(0, 0, 10);
+        dot.fill(0x0000ff);
+        dot.stroke({ width: 3, color: 0xffffff });
+        (preview as any).dotState = "blue";
+      } else {
+        // Red for no mode
+        dot.circle(0, 0, 8);
+        dot.fill(0xff0000);
+        dot.stroke({ width: 2, color: 0xffffff });
+        (preview as any).dotState = "red";
+      }
+    }
+
+    // Update button appearances
+    this.updateModeButtons();
+  }
+
+  private updateModeButtons(): void {
+    const spriteGraphics = (this.spriteModeButton as any).graphics;
+    const anchorGraphics = (this.anchorModeButton as any).graphics;
+
+    if (spriteGraphics) {
+      spriteGraphics.clear();
+      spriteGraphics.roundRect(0, 0, 180, 50, 8);
+      spriteGraphics.fill(this.dragMode === "sprite" ? 0x00ff00 : 0x4a90e2);
+      spriteGraphics.stroke({ width: 2, color: 0xffffff });
+    }
+
+    if (anchorGraphics) {
+      anchorGraphics.clear();
+      anchorGraphics.roundRect(0, 0, 180, 50, 8);
+      anchorGraphics.fill(this.dragMode === "anchor" ? 0x0000ff : 0x4a90e2);
+      anchorGraphics.stroke({ width: 2, color: 0xffffff });
+    }
+  }
+
   private async createAllTankPreviews(): Promise<void> {
     const allBases = TankConfigRegistry.getAllTankBases();
     const allGuns = TankConfigRegistry.getAllTankGuns();
@@ -210,7 +423,7 @@ export class TankPreviewScene extends Scene {
     const padding = 20;
     const tankSpacing = 250;
     const startX = padding;
-    let currentY = 100;
+    let currentY = 100 + 100; // Add 100px padding from top
     const maxTanksPerRow = Math.floor(
       (this.screenWidth - padding * 2) / tankSpacing
     );
@@ -268,7 +481,7 @@ export class TankPreviewScene extends Scene {
         gunId: gunId,
         initialX: 0,
         initialY: 0,
-        scale: 0.3,
+        scale: 1, // Increased from 0.3 for better visibility
       });
 
       // Position tank container in scroll container
@@ -334,18 +547,17 @@ export class TankPreviewScene extends Scene {
       this.scrollContainer.addChild(tank.container);
       this.tankContainers.push(tank.container);
 
-      // Create red dot at gun pivot point (pivot container origin)
-      const gunAnchorDot = new Graphics();
-      gunAnchorDot.circle(0, 0, 8);
-      gunAnchorDot.fill(0xff0000); // Red dot
-      gunAnchorDot.stroke({ width: 2, color: 0xffffff });
-
       // Calculate pivot position relative to scroll container
       const tankContainerX = x;
       const tankContainerY = y;
       const pivotX = tankContainerX + gunPivot.x;
       const pivotY = tankContainerY + gunPivot.y;
 
+      // Create red dot at gun pivot point (pivot container origin)
+      const gunAnchorDot = new Graphics();
+      gunAnchorDot.circle(0, 0, 8);
+      gunAnchorDot.fill(0xff0000); // Red dot (default state)
+      gunAnchorDot.stroke({ width: 2, color: 0xffffff });
       gunAnchorDot.x = pivotX;
       gunAnchorDot.y = pivotY;
       gunAnchorDot.zIndex = 1000; // Always on top
@@ -355,7 +567,7 @@ export class TankPreviewScene extends Scene {
       // Add to scroll container at the same level as tank container
       this.scrollContainer.addChild(gunAnchorDot);
 
-      // Store preview data
+      // Store preview data first
       const previewData: TankPreviewData = {
         tank: tank,
         anchorDot: gunAnchorDot,
@@ -371,22 +583,72 @@ export class TankPreviewScene extends Scene {
         tankContainerX: tankContainerX,
         tankContainerY: tankContainerY,
       };
+
+      // Create red outline for gun sprite bounds
+      const gunBoundsOutline = new Graphics();
+      const updateGunBounds = () => {
+        gunBoundsOutline.clear();
+        // Get bounds in the gun container's local space
+        // We need to get the bounds of the gun sprite relative to the gun container
+        const gunSprite = tank.gun.gun;
+
+        // Get the sprite's texture dimensions
+        const textureWidth = gunSprite.texture.width;
+        const textureHeight = gunSprite.texture.height;
+
+        // Get scale
+        const scaleX = gunSprite.scale.x;
+        const scaleY = gunSprite.scale.y;
+
+        // Calculate scaled dimensions
+        const scaledWidth = textureWidth * scaleX;
+        const scaledHeight = textureHeight * scaleY;
+
+        // Get anchor point
+        const anchorX = gunSprite.anchor.x;
+        const anchorY = gunSprite.anchor.y;
+
+        // Calculate the actual bounds in container space
+        // When anchor is (0, 0.5), the sprite's position is at left-center
+        // The bounds start at: position - (anchor * scaledSize)
+        const boundsX = gunSprite.x - anchorX * scaledWidth;
+        const boundsY = gunSprite.y - anchorY * scaledHeight;
+
+        // Draw rectangle at the correct position with scaled dimensions
+        gunBoundsOutline.rect(boundsX, boundsY, scaledWidth, scaledHeight);
+        gunBoundsOutline.stroke({ width: 2, color: 0xff0000 }); // Red outline
+      };
+      updateGunBounds();
+      gunBoundsOutline.zIndex = 999; // Just below anchor dot
+      // Add to gun container so it moves with the gun
+      tank.gun.container.addChild(gunBoundsOutline);
+      // Store update function for later
+      (previewData as any).updateGunBounds = updateGunBounds;
+      // Store reference to gunBoundsOutline for cleanup if needed
+      (previewData as any).gunBoundsOutline = gunBoundsOutline;
+
       this.tankPreviews.push(previewData);
 
       // Make anchor draggable
       gunAnchorDot.on("pointerdown", (e) => {
         this.selectPreview(previewData);
-        // Get screen Y coordinate from the native event
-        const nativeEvent = e.data.originalEvent;
-        let screenY: number;
-        if (nativeEvent && "clientY" in nativeEvent) {
-          screenY = (nativeEvent as unknown as { clientY: number }).clientY;
-        } else {
-          screenY = e.global.y;
+        // Only start dragging if in sprite or anchor mode
+        if (this.dragMode) {
+          // Get screen Y coordinate from the native event
+          const nativeEvent = e.data.originalEvent;
+          let screenY: number;
+          if (nativeEvent && "clientY" in nativeEvent) {
+            screenY = (nativeEvent as unknown as { clientY: number }).clientY;
+          } else {
+            screenY = e.global.y;
+          }
+          this.startDrag(screenY, previewData);
         }
-        this.startDrag(screenY, previewData);
         e.stopPropagation();
       });
+
+      // Initialize dot state based on current global mode
+      this.updateDotForMode(previewData);
 
       // Create label
       const labelStyle = new TextStyle({
@@ -440,25 +702,69 @@ export class TankPreviewScene extends Scene {
         Math.min(this.scrollY, this.scrollContainer.height - this.screenHeight)
       );
       this.scrollContainer.y = -this.scrollY;
+
+      // Update mouse position to account for scroll change
+      // Y needs to be recalculated based on current scroll
+      // Get the last known mouse client Y and recalculate
+      const rect = app.canvas.getBoundingClientRect();
+      if ((this as any).lastMouseClientY !== undefined) {
+        this.mousePosition.y =
+          (this as any).lastMouseClientY - rect.top + this.scrollY;
+      }
     };
     app.canvas.addEventListener("wheel", this.wheelHandler);
   }
 
   private selectPreview(preview: TankPreviewData): void {
+    // If clicking the same preview, deselect it
+    if (this.selectedPreview === preview) {
+      // Deselect - keep global mode but unselect this preview
+      this.selectedPreview = null;
+      // Update dot to reflect global mode
+      this.updateDotForMode(preview);
+      return;
+    }
+
     // Deselect previous preview
     if (this.selectedPreview) {
-      this.selectedPreview.anchorDot.clear();
-      this.selectedPreview.anchorDot.circle(0, 0, 8);
-      this.selectedPreview.anchorDot.fill(0xff0000);
-      this.selectedPreview.anchorDot.stroke({ width: 2, color: 0xffffff });
+      this.updateDotForMode(this.selectedPreview);
     }
 
     // Select new preview
     this.selectedPreview = preview;
-    preview.anchorDot.clear();
-    preview.anchorDot.circle(0, 0, 10);
-    preview.anchorDot.fill(0x00ff00); // Green when selected
-    preview.anchorDot.stroke({ width: 3, color: 0xffffff });
+    // Update dot to show it's selected (slightly larger, with highlight)
+    this.updateDotForMode(preview, true);
+  }
+
+  private updateDotForMode(
+    preview: TankPreviewData,
+    isSelected: boolean = false
+  ): void {
+    const dot = preview.anchorDot;
+    dot.clear();
+
+    const size = isSelected ? 12 : 10;
+    const strokeWidth = isSelected ? 4 : 3;
+
+    if (this.dragMode === "sprite") {
+      // Green for sprite mode
+      dot.circle(0, 0, size);
+      dot.fill(0x00ff00);
+      dot.stroke({ width: strokeWidth, color: 0xffffff });
+      (preview as any).dotState = "green";
+    } else if (this.dragMode === "anchor") {
+      // Blue for anchor mode
+      dot.circle(0, 0, size);
+      dot.fill(0x0000ff);
+      dot.stroke({ width: strokeWidth, color: 0xffffff });
+      (preview as any).dotState = "blue";
+    } else {
+      // Red for no mode
+      dot.circle(0, 0, isSelected ? 10 : 8);
+      dot.fill(0xff0000);
+      dot.stroke({ width: isSelected ? 3 : 2, color: 0xffffff });
+      (preview as any).dotState = "red";
+    }
   }
 
   private startDrag(globalY: number, preview: TankPreviewData): void {
@@ -466,52 +772,104 @@ export class TankPreviewScene extends Scene {
     this.dragStartY = globalY;
     this.dragStartXOffset = preview.xOffset;
     this.dragStartYOffset = preview.yOffset;
+    // Store initial pivot Y position for anchor mode
+    (preview as any).initialPivotY = preview.gunPivot.y;
   }
 
   private setupDragHandlers(): void {
     const app = window.app;
 
     const onMouseMove = (e: MouseEvent) => {
-      if (!this.isDragging || !this.selectedPreview) return;
+      if (!this.isDragging || !this.selectedPreview || !this.dragMode) return;
 
       // Get mouse position in screen coordinates
       const mouseY = e.clientY;
       const deltaY = mouseY - this.dragStartY;
 
-      // Update gun sprite position within pivot container
-      // deltaY directly affects the Y offset (negative = up, positive = down)
-      const newYOffset = this.dragStartYOffset + deltaY;
-      const newXOffset = this.dragStartXOffset; // X offset can be adjusted if needed
-
       const tank = this.selectedPreview.tank;
 
-      // Update gun sprite positions within gun container
-      // Negative offsets move the gun so the pivot point aligns with desired location
-      tank.gun.gun.x = newXOffset;
-      tank.gun.gun.y = newYOffset;
+      if (this.dragMode === "sprite") {
+        // SPRITE MODE: Move the gun sprite within the pivot container
+        const newYOffset = this.dragStartYOffset + deltaY;
+        const newXOffset = this.dragStartXOffset;
 
-      if (tank.gun.gunBase) {
-        tank.gun.gunBase.x = newXOffset;
-        tank.gun.gunBase.y = newYOffset;
+        // Update gun sprite positions within gun container
+        tank.gun.gun.x = newXOffset;
+        tank.gun.gun.y = newYOffset;
+
+        if (tank.gun.gunBase) {
+          tank.gun.gunBase.x = newXOffset;
+          tank.gun.gunBase.y = newYOffset;
+        }
+
+        if (tank.gun.fireAnimation) {
+          tank.gun.fireAnimation.x = newXOffset;
+          tank.gun.fireAnimation.y = newYOffset;
+        }
+
+        // Update preview data
+        this.selectedPreview.xOffset = newXOffset;
+        this.selectedPreview.yOffset = newYOffset;
+
+        // Update gun bounds outline
+        const updateGunBounds = (this.selectedPreview as any).updateGunBounds;
+        if (updateGunBounds) {
+          updateGunBounds();
+        }
+
+        // Update anchor dot position to follow the pivot point (pivot container origin)
+        const tankContainerX = this.selectedPreview.tankContainerX;
+        const tankContainerY = this.selectedPreview.tankContainerY;
+        const pivotX = tankContainerX + this.selectedPreview.gunPivot.x;
+        const pivotY = tankContainerY + this.selectedPreview.gunPivot.y;
+
+        this.selectedPreview.anchorDot.x = pivotX;
+        this.selectedPreview.anchorDot.y = pivotY;
+      } else if (this.dragMode === "anchor") {
+        // ANCHOR MODE: Move the pivot container (anchor point) Y position
+        const initialPivotY =
+          (this.selectedPreview as any).initialPivotY ??
+          this.selectedPreview.gunPivot.y;
+        if (!(this.selectedPreview as any).initialPivotY) {
+          (this.selectedPreview as any).initialPivotY =
+            this.selectedPreview.gunPivot.y;
+        }
+
+        // Move pivot container Y by the delta
+        this.selectedPreview.gunPivot.y = initialPivotY + deltaY;
+
+        // Compensate gun sprite position: when pivot moves, gun should move opposite to stay visually in place
+        const compensatedYOffset = this.dragStartYOffset - deltaY;
+
+        // Update gun sprite positions to compensate for pivot movement
+        tank.gun.gun.x = this.dragStartXOffset;
+        tank.gun.gun.y = compensatedYOffset;
+
+        if (tank.gun.gunBase) {
+          tank.gun.gunBase.x = this.dragStartXOffset;
+          tank.gun.gunBase.y = compensatedYOffset;
+        }
+
+        if (tank.gun.fireAnimation) {
+          tank.gun.fireAnimation.x = this.dragStartXOffset;
+          tank.gun.fireAnimation.y = compensatedYOffset;
+        }
+
+        // Update gun bounds outline
+        const updateGunBounds = (this.selectedPreview as any).updateGunBounds;
+        if (updateGunBounds) {
+          updateGunBounds();
+        }
+
+        // Update anchor dot position to follow the new pivot point
+        const tankContainerX = this.selectedPreview.tankContainerX;
+        const tankContainerY = this.selectedPreview.tankContainerY;
+        const pivotX = tankContainerX + this.selectedPreview.gunPivot.x;
+        const pivotY = tankContainerY + this.selectedPreview.gunPivot.y;
+
+        this.selectedPreview.anchorDot.x = pivotX;
+        this.selectedPreview.anchorDot.y = pivotY;
       }
-
-      if (tank.gun.fireAnimation) {
-        tank.gun.fireAnimation.x = newXOffset;
-        tank.gun.fireAnimation.y = newYOffset;
-      }
-
-      // Update preview data
-      this.selectedPreview.xOffset = newXOffset;
-      this.selectedPreview.yOffset = newYOffset;
-
-      // Update anchor dot position to follow the pivot point (pivot container origin)
-      const tankContainerX = this.selectedPreview.tankContainerX;
-      const tankContainerY = this.selectedPreview.tankContainerY;
-      const pivotX = tankContainerX + this.selectedPreview.gunPivot.x;
-      const pivotY = tankContainerY + this.selectedPreview.gunPivot.y;
-
-      this.selectedPreview.anchorDot.x = pivotX;
-      this.selectedPreview.anchorDot.y = pivotY;
 
       // Update info text
       const infoText = (this.selectedPreview as any).infoText as Text;
@@ -520,8 +878,12 @@ export class TankPreviewScene extends Scene {
           this.selectedPreview.baseId,
           this.selectedPreview.gunId
         );
-        const gunOffset = this.selectedPreview.currentYOffset - baseOffset;
-        infoText.text = `Base: ${baseOffset} | Gun: ${gunOffset.toFixed(1)} | X: ${newXOffset.toFixed(1)} | Y: ${newYOffset.toFixed(1)}`;
+        const gunConfig = TankConfigRegistry.getTankGun(
+          this.selectedPreview.gunId
+        );
+        const gunOffset = gunConfig?.gunYOffset ?? 0;
+        const modeText = this.dragMode === "sprite" ? "SPRITE" : "ANCHOR";
+        infoText.text = `[${modeText}] Base: ${baseOffset} | Gun: ${gunOffset} | X: ${this.selectedPreview.xOffset.toFixed(1)} | Y: ${this.selectedPreview.yOffset.toFixed(1)}`;
       }
     };
 
@@ -538,76 +900,82 @@ export class TankPreviewScene extends Scene {
   }
 
   private handleExport(): void {
-    if (!this.selectedPreview) {
-      alert(
-        "Please select a tank preview by clicking on its gun anchor (red/green dot)"
+    // Export all tank previews
+    const allExports: any[] = [];
+
+    for (const preview of this.tankPreviews) {
+      const baseConfig = TankConfigRegistry.getTankBase(preview.baseId);
+      const gunConfig = TankConfigRegistry.getTankGun(preview.gunId);
+
+      // Get sprite name from texture URL
+      const spriteName =
+        baseConfig?.baseTextureUrl.split("/").pop()?.replace(".png", "") ??
+        "unknown";
+      const gunName = preview.gunName;
+      const yOffset = preview.currentYOffset;
+      const xOffset = preview.xOffset;
+      const yPivotOffset = preview.yOffset;
+
+      // Get all tank information
+      const baseOffset = TankConfigRegistry.getGunYOffsetForBase(
+        preview.baseId,
+        preview.gunId
       );
-      return;
+      const gunOffset = gunConfig?.gunYOffset ?? 0;
+      const baseSpeed = baseConfig?.speed ?? 1.0;
+      const gunRange = gunConfig?.range ?? 1000;
+      const gunFireRate = gunConfig?.fireRate ?? 2;
+      const gunDamage = gunConfig?.damage ?? 10;
+      const gunBulletSpeed = gunConfig?.bulletSpeed ?? 1.0;
+
+      // Create export data for this tank combination
+      const exportData = {
+        spriteName: spriteName,
+        gunName: gunName,
+        baseId: preview.baseId,
+        gunId: preview.gunId,
+        baseName: preview.baseName,
+        yOffset: parseFloat(yOffset.toFixed(2)),
+        baseConfig: {
+          gunYOffset: baseOffset, // Current offset for this gun
+          gunYOffsets: baseConfig?.gunYOffsets, // All per-gun offsets (if exists)
+          speed: baseSpeed,
+        },
+        gunConfig: {
+          gunYOffset: gunOffset,
+          range: gunRange,
+          fireRate: gunFireRate,
+          damage: gunDamage,
+          bulletSpeed: gunBulletSpeed,
+          pivotOffset: {
+            x: parseFloat(xOffset.toFixed(1)),
+            y: parseFloat(yPivotOffset.toFixed(1)),
+          },
+        },
+      };
+
+      allExports.push(exportData);
     }
 
-    const preview = this.selectedPreview;
-    const baseConfig = TankConfigRegistry.getTankBase(preview.baseId);
-    const gunConfig = TankConfigRegistry.getTankGun(preview.gunId);
-
-    // Get sprite name from texture URL
-    const spriteName =
-      baseConfig?.baseTextureUrl.split("/").pop()?.replace(".png", "") ??
-      "unknown";
-    const gunName = preview.gunName;
-    const yOffset = preview.currentYOffset;
-    const xOffset = preview.xOffset;
-    const yPivotOffset = preview.yOffset;
-
-    // Get all tank information
-    const baseOffset = TankConfigRegistry.getGunYOffsetForBase(
-      preview.baseId,
-      preview.gunId
-    );
-    const gunOffset = gunConfig?.gunYOffset ?? 0;
-    const baseSpeed = baseConfig?.speed ?? 1.0;
-    const gunRange = gunConfig?.range ?? 1000;
-    const gunFireRate = gunConfig?.fireRate ?? 2;
-    const gunDamage = gunConfig?.damage ?? 10;
-    const gunBulletSpeed = gunConfig?.bulletSpeed ?? 1.0;
-
-    // Create comprehensive export data
-    const exportData = {
-      spriteName: spriteName,
-      gunName: gunName,
-      baseId: preview.baseId,
-      gunId: preview.gunId,
-      baseName: preview.baseName,
-      yOffset: yOffset.toFixed(2),
-      baseConfig: {
-        gunYOffset: baseOffset, // Current offset for this gun
-        gunYOffsets: baseConfig?.gunYOffsets, // All per-gun offsets (if exists)
-        speed: baseSpeed,
-      },
-      gunConfig: {
-        gunYOffset: gunOffset,
-        range: gunRange,
-        fireRate: gunFireRate,
-        damage: gunDamage,
-        bulletSpeed: gunBulletSpeed,
-        pivotOffset: {
-          x: xOffset.toFixed(1),
-          y: yPivotOffset.toFixed(1),
-        },
-      },
+    // Create final export object with all tank combinations
+    const finalExport = {
+      exportDate: new Date().toISOString(),
+      totalCombinations: allExports.length,
+      tankCombinations: allExports,
     };
 
     // Display in console
-    console.log("=== EXPORT DATA ===");
-    console.log(JSON.stringify(exportData, null, 2));
-    console.log("===================");
+    console.log("=== EXPORT DATA (ALL TANKS) ===");
+    console.log(JSON.stringify(finalExport, null, 2));
+    console.log("===============================");
 
     // Copy to clipboard
-    const exportString = JSON.stringify(exportData, null, 2);
+    const exportString = JSON.stringify(finalExport, null, 2);
     navigator.clipboard
       .writeText(exportString)
       .then(() => {
         alert(
-          `Export Data Copied to Clipboard!\n\nSprite: ${spriteName}\nGun: ${gunName}\nY Offset: ${yOffset.toFixed(2)}\nPivot X: ${xOffset.toFixed(1)}\nPivot Y: ${yPivotOffset.toFixed(1)}\n\n(Full data also logged to console)`
+          `All Tank Data Exported!\n\nTotal Combinations: ${allExports.length}\n\nData copied to clipboard and logged to console.`
         );
       })
       .catch(() => {
@@ -616,8 +984,107 @@ export class TankPreviewScene extends Scene {
       });
   }
 
-  update(_deltaTime: number): void {
-    // Preview scene doesn't need updates
+  private setupInputHandlers(): void {
+    const app = window.app;
+
+    // Keyboard input
+    const onKeyDown = (e: KeyboardEvent) => {
+      this.keys.add(e.code);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      this.keys.delete(e.code);
+    };
+
+    // Mouse position tracking
+    const onMouseMove = (e: MouseEvent) => {
+      // Get mouse position relative to the canvas
+      const rect = app.canvas.getBoundingClientRect();
+      // Store client Y for scroll recalculation
+      (this as any).lastMouseClientY = e.clientY;
+      // Convert to scroll container space (account for scroll offset)
+      this.mousePosition.x = e.clientX - rect.left;
+      this.mousePosition.y = e.clientY - rect.top + this.scrollY;
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    app.canvas.addEventListener("mousemove", onMouseMove);
+
+    // Store handlers for cleanup
+    (this as any).inputHandlers = { onKeyDown, onKeyUp, onMouseMove };
+  }
+
+  update(deltaTime: number): void {
+    // Handle movement for all tanks
+    this.updateTankMovement(deltaTime);
+
+    // Handle gun rotation for all tanks
+    this.updateGunRotation();
+  }
+
+  private updateTankMovement(deltaTime: number): void {
+    // Check for movement keys
+    const wDown = this.keys.has("KeyW");
+    const sDown = this.keys.has("KeyS");
+    const aDown = this.keys.has("KeyA");
+    const dDown = this.keys.has("KeyD");
+
+    // Calculate movement direction
+    let moveX = 0;
+    let moveY = 0;
+
+    if (wDown) moveY -= 1;
+    if (sDown) moveY += 1;
+    if (aDown) moveX -= 1;
+    if (dDown) moveX += 1;
+
+    // Normalize diagonal movement
+    if (moveX !== 0 && moveY !== 0) {
+      moveX *= 0.707; // 1/sqrt(2) for diagonal normalization
+      moveY *= 0.707;
+    }
+
+    // Apply movement to all tank containers
+    const moveSpeed = this.movementSpeed * deltaTime;
+    for (const preview of this.tankPreviews) {
+      preview.tank.container.x += moveX * moveSpeed;
+      preview.tank.container.y += moveY * moveSpeed;
+
+      // Update stored container positions
+      preview.tankContainerX = preview.tank.container.x;
+      preview.tankContainerY = preview.tank.container.y;
+
+      // Update anchor dot position
+      const pivotX = preview.tankContainerX + preview.gunPivot.x;
+      const pivotY = preview.tankContainerY + preview.gunPivot.y;
+      preview.anchorDot.x = pivotX;
+      preview.anchorDot.y = pivotY;
+    }
+  }
+
+  private updateGunRotation(): void {
+    // Rotate all gun pivots to point at mouse
+    for (const preview of this.tankPreviews) {
+      // Get pivot position in scroll container space
+      // The tank container is positioned in scroll container, and pivot is relative to tank container
+      const pivotScreenX = preview.tankContainerX + preview.gunPivot.x;
+      const pivotScreenY = preview.tankContainerY + preview.gunPivot.y;
+
+      // Calculate angle to mouse (mouse position is already in scroll container space)
+      const dx = this.mousePosition.x - pivotScreenX;
+      const dy = this.mousePosition.y - pivotScreenY;
+
+      // Only rotate if mouse is not too close (avoid jitter)
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance < 5) continue;
+
+      // Compute angle (PixiJS rotation: 0 points up, atan2: 0 points right)
+      // So we subtract Math.PI/2 to convert from atan2 to PixiJS rotation
+      const angle = Math.atan2(dy, dx) - Math.PI / 2;
+
+      // Apply rotation to gun pivot container
+      preview.gunPivot.rotation = angle;
+    }
   }
 
   destroy(): void {
@@ -646,6 +1113,14 @@ export class TankPreviewScene extends Scene {
       app.canvas.removeEventListener("mousemove", dragHandlers.onMouseMove);
       app.canvas.removeEventListener("mouseup", dragHandlers.onMouseUp);
       app.canvas.removeEventListener("mouseleave", dragHandlers.onMouseUp);
+    }
+
+    // Remove input handlers
+    const inputHandlers = (this as any).inputHandlers;
+    if (inputHandlers) {
+      window.removeEventListener("keydown", inputHandlers.onKeyDown);
+      window.removeEventListener("keyup", inputHandlers.onKeyUp);
+      app.canvas.removeEventListener("mousemove", inputHandlers.onMouseMove);
     }
 
     // Destroy all tank containers
