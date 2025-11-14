@@ -494,7 +494,7 @@ export class TankPreviewScene extends Scene {
       const baseName = baseConfig?.name ?? baseId;
       const gunName = gunConfig?.name ?? gunId;
 
-      // Get initial offsets
+      // Get anchor Y offset from registry (base offset + gun offset)
       const baseOffset = TankConfigRegistry.getGunYOffsetForBase(baseId, gunId);
       const gunOffset = gunConfig?.gunYOffset ?? 0;
       const totalOffset = baseOffset + gunOffset;
@@ -504,9 +504,14 @@ export class TankPreviewScene extends Scene {
       const gunPivot = new Container();
 
       // Position pivot container where we want the rotation point
-      // Initially at the gun's position (center of tank)
+      // The exported yOffset is the total anchor Y position relative to the gun container
+      // Since tank.gun.container.y is 0 (container itself isn't moved), we can use totalOffset directly
+      // But we need to account for the fact that Tank1.create() already moved the gun sprites by totalGunYOffset
+      // So we need to position the pivot at the exported anchor Y position
       gunPivot.x = tank.gun.container.x;
-      gunPivot.y = tank.gun.container.y + totalOffset;
+      // Use exported anchor Y if available, otherwise use calculated offset
+      // The anchor Y is relative to the gun container's origin (which is at initialY = 0)
+      gunPivot.y = totalOffset;
 
       // Remove gun container from tank and add to pivot
       tank.container.removeChild(tank.gun.container);
@@ -525,13 +530,14 @@ export class TankPreviewScene extends Scene {
       }
 
       // Position gun sprites within gun container to align pivot point
-      // Initially center the gun horizontally, no vertical offset
-      // The gun container is already positioned, we just adjust sprites within it
+      // Calculate default pivot offsets based on gun width
       const gunWidth = tank.gun.gun.width;
-      const initialXOffset = -gunWidth * 0.5; // Move gun left so pivot is at center
+      const initialXOffset = -gunWidth * 0.5; // Center the gun horizontally
       const initialYOffset = 0; // No vertical offset initially
 
-      // Set gun sprite positions (negative offsets to align pivot)
+      // Set gun sprite positions within pivot container
+      // The gun sprites were initially at (0, 0) with anchor (0.5, 0.5), then moved by totalGunYOffset
+      // Now we're setting them to the calculated pivot offset positions with anchor (0, 0.5)
       tank.gun.gun.x = initialXOffset;
       tank.gun.gun.y = initialYOffset;
       if (tank.gun.gunBase) {

@@ -366,7 +366,7 @@ export function initializeTankRegistry(): void {
     fireRate: 3, // Fast fire rate
     damage: 8, // Lower damage
     bulletSpeed: 0.9,
-    gunYOffset: 0, // Y offset for gun position (adjust as needed)
+    gunYOffset: 0, // Y offset for gun position (adjust as needed) - Rapid Fire has no gun-specific offset
   });
   TankConfigRegistry.registerTankGun({
     id: "rapid_fire_color2",
@@ -421,7 +421,7 @@ export function initializeTankRegistry(): void {
     fireRate: 2, // Standard fire rate
     damage: 12, // Balanced damage
     bulletSpeed: 1.0,
-    gunYOffset: 10, // Y offset for gun position (adjust as needed)
+    gunYOffset: 10, // Y offset for gun position (adjust as needed) - Balanced has +10 offset
   });
   TankConfigRegistry.registerTankGun({
     id: "balanced_color2",
@@ -476,7 +476,7 @@ export function initializeTankRegistry(): void {
     fireRate: 1, // Slow fire rate
     damage: 20, // High damage
     bulletSpeed: 1.5, // Fast bullets
-    gunYOffset: 0, // Y offset for gun position (adjust as needed)
+    gunYOffset: 0, // Y offset for gun position (adjust as needed) - Heavy Cannon has no gun-specific offset
   });
   TankConfigRegistry.registerTankGun({
     id: "heavy_cannon_color2",
@@ -531,7 +531,7 @@ export function initializeTankRegistry(): void {
     fireRate: 1.2, // Slow fire rate
     damage: 18, // High damage
     bulletSpeed: 1.1,
-    gunYOffset: 20, // Y offset for gun position (adjust as needed)
+    gunYOffset: 20, // Y offset for gun position (adjust as needed) - Sniper has +20 offset
   });
   TankConfigRegistry.registerTankGun({
     id: "sniper_color2",
