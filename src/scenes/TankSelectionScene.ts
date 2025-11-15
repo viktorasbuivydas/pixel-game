@@ -383,7 +383,7 @@ export class TankSelectionScene extends Scene {
     });
     this.infoText.anchor.set(0.5, 0);
     this.infoText.x = this.screenWidth / 2;
-    this.infoText.y = 520;
+    this.infoText.y = 320;
     this.addChild(this.infoText);
 
     this.updateInfo();
