@@ -33,8 +33,8 @@ export const TankPreview: React.FC<TankPreviewProps> = ({
 
       // Get container dimensions
       const rect = containerRef.current.getBoundingClientRect();
-      const width = Math.max(rect.width || 400, 400);
-      const height = Math.max(rect.height || 400, 400);
+      const width = Math.max(rect.width || 300, 200);
+      const height = Math.max(rect.height || 300, 200);
 
       // Create PixiJS application
       const app = new Application();
@@ -92,12 +92,14 @@ export const TankPreview: React.FC<TankPreviewProps> = ({
     const handleResize = () => {
       if (appRef.current && containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
-        const width = Math.max(rect.width || 400, 400);
-        const height = Math.max(rect.height || 400, 400);
-        appRef.current.renderer.resize(width, height);
-        if (tankRef.current?.container) {
-          tankRef.current.container.x = width / 2;
-          tankRef.current.container.y = height / 2;
+        const width = Math.max(rect.width || 300, 200);
+        const height = Math.max(rect.height || 300, 200);
+        if (width > 0 && height > 0) {
+          appRef.current.renderer.resize(width, height);
+          if (tankRef.current?.container) {
+            tankRef.current.container.x = width / 2;
+            tankRef.current.container.y = height / 2;
+          }
         }
       }
     };
@@ -177,8 +179,8 @@ export const TankPreview: React.FC<TankPreviewProps> = ({
 
       // Get container dimensions
       const rect = containerRef.current?.getBoundingClientRect();
-      const width = Math.max(rect?.width || 400, 400);
-      const height = Math.max(rect?.height || 400, 400);
+      const width = Math.max(rect?.width || 300, 200);
+      const height = Math.max(rect?.height || 300, 200);
 
       // Create new tank
       const baseId = getTankBaseIdFromIndex(baseIndex, colorIndex);
@@ -219,6 +221,10 @@ export const TankPreview: React.FC<TankPreviewProps> = ({
         width: "100%",
         height: "100%",
         minHeight: "300px",
+        minWidth: "200px",
+        position: "absolute",
+        top: 0,
+        left: 0,
       }}
     />
   );

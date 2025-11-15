@@ -95,13 +95,28 @@ export const TankSelectionScene: React.FC<TankSelectionSceneProps> = ({
           gap: "30px",
         }}
       >
-        <h1 style={{ fontSize: "48px", fontWeight: "bold", margin: 0 }}>
+        <h1
+          style={{
+            fontSize: "48px",
+            fontWeight: "bold",
+            margin: 0,
+            fontFamily: "Poppins, sans-serif",
+          }}
+        >
           SELECT YOUR TANK
         </h1>
 
         {/* Color Selection */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          <h2 style={{ fontSize: "24px", margin: 0 }}>COLOR</h2>
+          <h2
+            style={{
+              fontSize: "24px",
+              margin: 0,
+              fontFamily: "Poppins, sans-serif",
+            }}
+          >
+            COLOR
+          </h2>
           <div
             style={{
               display: "flex",
@@ -131,7 +146,15 @@ export const TankSelectionScene: React.FC<TankSelectionSceneProps> = ({
 
         {/* Base Selection */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          <h2 style={{ fontSize: "24px", margin: 0 }}>TANK BASE</h2>
+          <h2
+            style={{
+              fontSize: "24px",
+              margin: 0,
+              fontFamily: "Poppins, sans-serif",
+            }}
+          >
+            TANK BASE
+          </h2>
           <div
             style={{
               display: "flex",
@@ -156,7 +179,15 @@ export const TankSelectionScene: React.FC<TankSelectionSceneProps> = ({
 
         {/* Gun Selection */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          <h2 style={{ fontSize: "24px", margin: 0 }}>GUN</h2>
+          <h2
+            style={{
+              fontSize: "24px",
+              margin: 0,
+              fontFamily: "Poppins, sans-serif",
+            }}
+          >
+            GUN
+          </h2>
           <div
             style={{
               display: "flex",
@@ -187,7 +218,7 @@ export const TankSelectionScene: React.FC<TankSelectionSceneProps> = ({
           display: "flex",
           flexDirection: "column",
           padding: "40px",
-          alignItems: "flex-end",
+          alignItems: "flex-start",
           gap: "20px",
         }}
       >
@@ -203,6 +234,8 @@ export const TankSelectionScene: React.FC<TankSelectionSceneProps> = ({
             color: "#ffffff",
             cursor: "pointer",
             transition: "background-color 0.2s",
+            fontFamily: "Poppins, sans-serif",
+            alignSelf: "flex-end",
           }}
           onMouseEnter={(e) =>
             (e.currentTarget.style.backgroundColor = "#5aa0f2")
@@ -217,14 +250,17 @@ export const TankSelectionScene: React.FC<TankSelectionSceneProps> = ({
         {/* Tank Preview Area - Centered */}
         <div
           style={{
-            flex: "1",
             width: "100%",
+            minHeight: "300px",
+            height: "400px",
+            maxHeight: "500px",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             borderRadius: "8px",
-            marginTop: "20px",
             overflow: "hidden",
+            backgroundColor: "#1a1a1a",
+            position: "relative",
           }}
         >
           <TankPreview
@@ -241,14 +277,26 @@ export const TankSelectionScene: React.FC<TankSelectionSceneProps> = ({
             display: "flex",
             flexDirection: "column",
             gap: "10px",
-            marginTop: "20px",
           }}
         >
-          <h2 style={{ fontSize: "24px", margin: 0, fontWeight: "bold" }}>
+          <h2
+            style={{
+              fontSize: "24px",
+              margin: 0,
+              fontWeight: "bold",
+              fontFamily: "Poppins, sans-serif",
+            }}
+          >
             STATS
           </h2>
           {stats ? (
-            <div style={{ fontSize: "18px", lineHeight: "1.6" }}>
+            <div
+              style={{
+                fontSize: "18px",
+                lineHeight: "1.6",
+                fontFamily: "Poppins, sans-serif",
+              }}
+            >
               <div>TANK: {stats.baseName}</div>
               <div>Speed: {(stats.baseSpeed * 100).toFixed(0)}%</div>
               <div style={{ marginTop: "10px" }}>GUN: {stats.gunName}</div>
@@ -260,7 +308,14 @@ export const TankSelectionScene: React.FC<TankSelectionSceneProps> = ({
               </div>
             </div>
           ) : (
-            <div style={{ fontSize: "18px" }}>Loading...</div>
+            <div
+              style={{
+                fontSize: "18px",
+                fontFamily: "Poppins, sans-serif",
+              }}
+            >
+              Loading...
+            </div>
           )}
         </div>
       </div>

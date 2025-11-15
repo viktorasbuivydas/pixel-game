@@ -101,7 +101,7 @@ export const TankButton: React.FC<TankButtonProps> = ({
           fontSize: "14px",
           color: "#ffffff",
           textAlign: "center",
-          fontFamily: "Arial, sans-serif",
+          fontFamily: "Poppins, sans-serif",
         }}
       >
         {label}

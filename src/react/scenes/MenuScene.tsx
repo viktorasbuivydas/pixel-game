@@ -35,7 +35,15 @@ export const MenuScene: React.FC<MenuSceneProps> = ({ onSceneChange }) => {
         gap: "40px",
       }}
     >
-      <h1 style={{ fontSize: "48px", fontWeight: "bold" }}>MENIU</h1>
+      <h1
+        style={{
+          fontSize: "48px",
+          fontWeight: "bold",
+          fontFamily: "Poppins, sans-serif",
+        }}
+      >
+        MENIU
+      </h1>
 
       <button
         onClick={handleUsernameChange}
@@ -49,6 +57,7 @@ export const MenuScene: React.FC<MenuSceneProps> = ({ onSceneChange }) => {
           cursor: "pointer",
           minWidth: "260px",
           transition: "background-color 0.2s",
+          fontFamily: "Poppins, sans-serif",
         }}
         onMouseEnter={(e) =>
           (e.currentTarget.style.backgroundColor = "#5aa0f2")
@@ -72,6 +81,7 @@ export const MenuScene: React.FC<MenuSceneProps> = ({ onSceneChange }) => {
           cursor: "pointer",
           minWidth: "260px",
           transition: "background-color 0.2s",
+          fontFamily: "Poppins, sans-serif",
         }}
         onMouseEnter={(e) =>
           (e.currentTarget.style.backgroundColor = "#777777")
