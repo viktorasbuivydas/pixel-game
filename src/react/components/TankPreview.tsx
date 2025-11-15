@@ -20,39 +20,16 @@ export const TankPreview: React.FC<TankPreviewProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const tankRef = useRef<any>(null);
+  const isInitializedRef = useRef(false);
 
+  // Initialize PixiJS app only once
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || isInitializedRef.current) return;
 
     let mounted = true;
 
-    const initPreview = async () => {
-      // Clean up previous preview
-      if (tankRef.current?.container) {
-        tankRef.current.container.destroy({ children: true });
-        tankRef.current = null;
-      }
-
-      if (appRef.current) {
-        try {
-          if (containerRef.current && appRef.current.canvas) {
-            containerRef.current.removeChild(appRef.current.canvas);
-          }
-          appRef.current.destroy(true, {
-            children: true,
-            texture: false,
-            baseTexture: false,
-          });
-        } catch (error) {
-          console.warn("Error cleaning up previous PixiJS app:", error);
-        }
-        appRef.current = null;
-        if (containerRef.current) {
-          containerRef.current.innerHTML = "";
-        }
-      }
-
-      if (!mounted || !containerRef.current) return;
+    const initApp = async () => {
+      if (!containerRef.current || !mounted) return;
 
       // Get container dimensions
       const rect = containerRef.current.getBoundingClientRect();
@@ -69,7 +46,14 @@ export const TankPreview: React.FC<TankPreviewProps> = ({
       });
 
       if (!mounted || !containerRef.current) {
-        app.destroy(true, { children: true, texture: false });
+        try {
+          app.destroy(true, {
+            children: true,
+            texture: false,
+          });
+        } catch (error) {
+          console.warn("Error destroying app in mounted check:", error);
+        }
         return;
       }
 
@@ -77,8 +61,9 @@ export const TankPreview: React.FC<TankPreviewProps> = ({
       containerRef.current.appendChild(app.canvas);
       app.canvas.style.width = "100%";
       app.canvas.style.height = "100%";
+      isInitializedRef.current = true;
 
-      // Create tank
+      // Create initial tank
       const baseId = getTankBaseIdFromIndex(baseIndex, colorIndex);
       const gunId = getGunIdFromIndex(gunIndex, colorIndex);
 
@@ -91,29 +76,24 @@ export const TankPreview: React.FC<TankPreviewProps> = ({
           scale: 1,
         });
 
-        if (!mounted) {
+        if (!mounted || !appRef.current) {
           tank.container.destroy({ children: true });
           return;
         }
 
         tankRef.current = tank;
-        app.stage.addChild(tank.container);
+        appRef.current.stage.addChild(tank.container);
       } catch (error) {
         console.error("Failed to create preview tank:", error);
       }
     };
-
-    // Use requestAnimationFrame to ensure container is rendered
-    const rafId = requestAnimationFrame(() => {
-      initPreview();
-    });
 
     // Handle resize
     const handleResize = () => {
       if (appRef.current && containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
         const width = Math.max(rect.width || 400, 400);
-        const height = Math.max(rect.height || 300, 300);
+        const height = Math.max(rect.height || 400, 400);
         appRef.current.renderer.resize(width, height);
         if (tankRef.current?.container) {
           tankRef.current.container.x = width / 2;
@@ -121,6 +101,11 @@ export const TankPreview: React.FC<TankPreviewProps> = ({
         }
       }
     };
+
+    // Use requestAnimationFrame to ensure container is rendered
+    const rafId = requestAnimationFrame(() => {
+      initApp();
+    });
 
     window.addEventListener("resize", handleResize);
 
@@ -130,6 +115,9 @@ export const TankPreview: React.FC<TankPreviewProps> = ({
       window.removeEventListener("resize", handleResize);
       if (tankRef.current?.container) {
         try {
+          if (appRef.current) {
+            appRef.current.stage.removeChild(tankRef.current.container);
+          }
           tankRef.current.container.destroy({ children: true });
         } catch (error) {
           console.warn("Error destroying tank container:", error);
@@ -154,18 +142,75 @@ export const TankPreview: React.FC<TankPreviewProps> = ({
           appRef.current.destroy(true, {
             children: true,
             texture: false,
-            baseTexture: false,
           });
         } catch (error) {
           console.warn("Error destroying PixiJS app:", error);
         }
         appRef.current = null;
+        isInitializedRef.current = false;
       }
       if (containerRef.current) {
         containerRef.current.innerHTML = "";
       }
     };
-  }, [baseIndex, gunIndex, colorIndex]);
+  }, []); // Only run once on mount
+
+  // Update tank when selection changes (but keep app alive)
+  useEffect(() => {
+    if (!isInitializedRef.current || !appRef.current) return;
+
+    let mounted = true;
+
+    const updateTank = async () => {
+      if (!appRef.current || !mounted) return;
+
+      // Remove old tank
+      if (tankRef.current?.container) {
+        try {
+          appRef.current.stage.removeChild(tankRef.current.container);
+          tankRef.current.container.destroy({ children: true });
+        } catch (error) {
+          console.warn("Error removing old tank:", error);
+        }
+        tankRef.current = null;
+      }
+
+      // Get container dimensions
+      const rect = containerRef.current?.getBoundingClientRect();
+      const width = Math.max(rect?.width || 400, 400);
+      const height = Math.max(rect?.height || 400, 400);
+
+      // Create new tank
+      const baseId = getTankBaseIdFromIndex(baseIndex, colorIndex);
+      const gunId = getGunIdFromIndex(gunIndex, colorIndex);
+
+      try {
+        const tank = await Tank1.create({
+          baseId,
+          gunId,
+          initialX: width / 2,
+          initialY: height / 2,
+          scale: 1,
+        });
+
+        if (!mounted || !appRef.current) {
+          tank.container.destroy({ children: true });
+          return;
+        }
+
+        tankRef.current = tank;
+        appRef.current.stage.addChild(tank.container);
+      } catch (error) {
+        console.error("Failed to create preview tank:", error);
+      }
+    };
+
+    updateTank();
+
+    return () => {
+      mounted = false;
+    };
+  }, [baseIndex, gunIndex, colorIndex]); // Only update tank when selection changes
 
   return (
     <div
