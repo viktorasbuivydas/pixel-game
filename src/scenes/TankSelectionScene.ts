@@ -3,7 +3,7 @@ import { Scene } from "./Scene";
 import { SceneManager } from "../core/SceneManager";
 import { MainScene } from "./MainScene";
 import { TankConfigRegistry } from "../core/tanks/TankConfig";
-import { Tank1 } from "../core/tanks/Tank1";
+import { TankEntity } from "../core/tanks/TankEntity";
 import { CookieUtils } from "../core/CookieUtils";
 import { TankPreviewScene } from "./TankPreviewScene";
 import {
@@ -433,7 +433,7 @@ export class TankSelectionScene extends Scene {
     const gunId = getGunIdFromIndex(this.selectedGun, this.selectedColor);
 
     try {
-      const tank = await Tank1.create({
+      const tank = await TankEntity.create({
         baseId: baseId,
         gunId: gunId,
         initialX: this.screenWidth / 2,

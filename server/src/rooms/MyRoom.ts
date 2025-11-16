@@ -41,6 +41,11 @@ export class MyRoom extends Room<MyRoomState> {
       player.speed = speed;
       player.rotationSpeed = message.rotationSpeed ?? 0;
       player.gunRotationSpeed = message.gunRotationSpeed ?? 0;
+      console.log(
+        `Player ${client.sessionId} moved to: ${player.x}, ${player.y}`
+      );
+
+      console.log(`Player gun rotation: ${player.gunRotation}`);
     });
 
     // Handle username updates

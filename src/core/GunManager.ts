@@ -1,4 +1,7 @@
-import { Graphics, Container } from "pixi.js";
+import { Container } from "pixi.js";
+import { GunManagerUI } from "./gunManager/GunManagerUI";
+import { GunManagerCalculations } from "./gunManager/GunManagerCalculations";
+import { GunManagerDebugger } from "./gunManager/GunManagerDebugger";
 
 export interface GunConfig {
   damage: number;
@@ -11,7 +14,7 @@ export interface GunConfig {
 }
 
 export interface Bullet {
-  sprite: Graphics;
+  sprite: any; // Graphics sprite
   x: number;
   y: number;
   vx: number; // Velocity X
@@ -31,13 +34,24 @@ export interface TankHitbox {
   sessionId: string;
 }
 
+/**
+ * GunManager - Manages bullet creation, movement, and collision
+ *
+ * This class has been refactored into separate modules:
+ * - GunManagerUI: Handles bullet sprite generation and visual updates
+ * - GunManagerCalculations: Handles all physics and collision calculations
+ * - GunManagerDebugger: Provides debugging utilities
+ */
 export class GunManager {
   private config: GunConfig;
   private bullets: Bullet[] = [];
   private container: Container;
   private lastShotTime: number = 0;
   private onHitCallback?: (bullet: Bullet, targetSessionId: string) => void;
-  private bulletSpeedMultiplier: number = 1.0;
+
+  // Modules
+  private ui: GunManagerUI;
+  private calculations: GunManagerCalculations;
 
   // Default gun configuration
   private static readonly DEFAULT_CONFIG: GunConfig = {
@@ -53,11 +67,24 @@ export class GunManager {
   constructor(
     container: Container,
     config?: Partial<GunConfig>,
-    onHit?: (bullet: Bullet, targetSessionId: string) => void
+    onHit?: (bullet: Bullet, targetSessionId: string) => void,
+    debugEnabled?: boolean
   ) {
     this.container = container;
     this.config = { ...GunManager.DEFAULT_CONFIG, ...config };
     this.onHitCallback = onHit;
+
+    // Initialize modules
+    this.ui = new GunManagerUI(container, this.config.bulletSize);
+    this.calculations = new GunManagerCalculations(
+      this.config.bulletSize,
+      this.config.bulletSpeed,
+      this.config.bulletLifetime
+    );
+
+    if (debugEnabled) {
+      GunManagerDebugger.setEnabled(true);
+    }
   }
 
   /**
@@ -65,6 +92,15 @@ export class GunManager {
    */
   updateConfig(config: Partial<GunConfig>): void {
     this.config = { ...this.config, ...config };
+    this.calculations.updateConfig(
+      config.bulletSize,
+      config.bulletSpeed,
+      config.bulletLifetime
+    );
+    if (config.bulletSize) {
+      // Recreate UI with new bullet size
+      this.ui = new GunManagerUI(this.container, config.bulletSize);
+    }
   }
 
   /**
@@ -78,7 +114,7 @@ export class GunManager {
    * Set bullet speed multiplier (for debug/testing)
    */
   setBulletSpeedMultiplier(multiplier: number): void {
-    this.bulletSpeedMultiplier = Math.max(0.1, multiplier);
+    this.calculations.setBulletSpeedMultiplier(multiplier);
   }
 
   /**
@@ -88,7 +124,11 @@ export class GunManager {
     const now = Date.now();
     const timeSinceLastShot = now - this.lastShotTime;
     const fireRateMs = 1000 / this.config.fireRate;
-    return timeSinceLastShot >= fireRateMs;
+    const canFire = timeSinceLastShot >= fireRateMs;
+
+    GunManagerDebugger.logFireRateCheck(canFire, timeSinceLastShot, fireRateMs);
+
+    return canFire;
   }
 
   /**
@@ -106,32 +146,23 @@ export class GunManager {
 
     this.lastShotTime = Date.now();
 
-    // Calculate bullet direction from gun rotation
-    // Gun rotation is in radians, with 0 pointing up (in PixiJS)
-    // To convert back to standard angle (0 = right), we add Math.PI/2
-    const bulletAngle = gunRotation + Math.PI / 2; // Convert to standard angle
-    const bulletSpeed = this.config.bulletSpeed * this.bulletSpeedMultiplier;
-    const vx = Math.cos(bulletAngle) * bulletSpeed;
-    const vy = Math.sin(bulletAngle) * bulletSpeed;
+    // Calculate bullet velocity and angle
+    const {
+      vx,
+      vy,
+      angle: bulletAngle,
+    } = this.calculations.calculateBulletVelocity(gunRotation);
 
-    // Create bullet sprite (simple circle for now)
-    const bulletSprite = new Graphics();
-    bulletSprite.circle(0, 0, this.config.bulletSize);
-    bulletSprite.fill(0xffff00); // Yellow bullet
-    bulletSprite.stroke({ width: 1, color: 0xffaa00 });
-    bulletSprite.x = gunX;
-    bulletSprite.y = gunY;
-    bulletSprite.rotation = gunRotation;
-    bulletSprite.zIndex = 150; // Above fog and tanks
+    // Calculate spawn position
+    const { x: spawnX, y: spawnY } =
+      this.calculations.calculateBulletSpawnPosition(gunX, gunY, bulletAngle);
 
-    // Calculate spawn position (at the end of the gun barrel)
-    const gunLength = 30; // Approximate gun length in pixels
-    const spawnX = gunX + Math.cos(bulletAngle) * gunLength;
-    const spawnY = gunY + Math.sin(bulletAngle) * gunLength;
-    bulletSprite.x = spawnX;
-    bulletSprite.y = spawnY;
-
-    this.container.addChild(bulletSprite);
+    // Create bullet sprite
+    const bulletSprite = this.ui.createBulletSprite(
+      spawnX,
+      spawnY,
+      gunRotation
+    );
 
     // Create bullet object
     const bullet: Bullet = {
@@ -148,6 +179,8 @@ export class GunManager {
     };
 
     this.bullets.push(bullet);
+    GunManagerDebugger.logBulletCreated(bullet);
+
     return bullet;
   }
 
@@ -169,80 +202,62 @@ export class GunManager {
       }
 
       // Update position
-      bullet.x += bullet.vx * deltaTime;
-      bullet.y += bullet.vy * deltaTime;
-      bullet.sprite.x = bullet.x;
-      bullet.sprite.y = bullet.y;
+      this.calculations.updateBulletPosition(bullet, deltaTime);
+      this.ui.updateBulletSprite(bullet);
 
       // Check collision with tanks
-      if (tanks) {
-        for (const tank of tanks) {
-          // Don't hit the owner of the bullet
-          if (tank.sessionId === bullet.ownerSessionId) {
-            continue;
+      if (tanks && tanks.length > 0) {
+        const collidingTanks = this.calculations.findCollidingTanks(
+          bullet,
+          tanks
+        );
+
+        if (collidingTanks.length > 0) {
+          // Hit detected! Use first colliding tank
+          const hitTank = collidingTanks[0];
+          bullet.hasHit = true;
+
+          GunManagerDebugger.logBulletHit(bullet, hitTank.sessionId);
+
+          if (this.onHitCallback) {
+            this.onHitCallback(bullet, hitTank.sessionId);
           }
 
-          // Simple circle-rectangle collision detection
-          const bulletRadius = this.config.bulletSize;
-          const tankLeft = tank.x - tank.width / 2;
-          const tankRight = tank.x + tank.width / 2;
-          const tankTop = tank.y - tank.height / 2;
-          const tankBottom = tank.y + tank.height / 2;
-
-          // Find closest point on rectangle to bullet center
-          const closestX = Math.max(tankLeft, Math.min(bullet.x, tankRight));
-          const closestY = Math.max(tankTop, Math.min(bullet.y, tankBottom));
-
-          // Calculate distance from bullet to closest point
-          const dx = bullet.x - closestX;
-          const dy = bullet.y - closestY;
-          const distanceSquared = dx * dx + dy * dy;
-
-          // Check if bullet collides with tank
-          if (distanceSquared < bulletRadius * bulletRadius) {
-            // Hit detected!
-            bullet.hasHit = true;
-            if (this.onHitCallback) {
-              this.onHitCallback(bullet, tank.sessionId);
-            }
-            bulletsToRemove.push(index);
-            return;
-          }
+          bulletsToRemove.push(index);
+          return;
         }
       }
 
       // Decrease lifetime
-      bullet.lifetime -= deltaTime;
+      this.calculations.decreaseBulletLifetime(bullet, deltaTime);
 
       // Check if bullet should be removed
-      if (bullet.lifetime <= 0) {
+      if (this.calculations.isBulletExpired(bullet)) {
+        GunManagerDebugger.logBulletRemoved(bullet, "expired");
         bulletsToRemove.push(index);
         return;
       }
 
       // Check world bounds
-      if (worldBounds) {
-        if (
-          bullet.x < worldBounds.minX ||
-          bullet.x > worldBounds.maxX ||
-          bullet.y < worldBounds.minY ||
-          bullet.y > worldBounds.maxY
-        ) {
-          bulletsToRemove.push(index);
-          return;
-        }
+      if (
+        worldBounds &&
+        this.calculations.isBulletOutOfBounds(bullet, worldBounds)
+      ) {
+        GunManagerDebugger.logBulletRemoved(bullet, "outOfBounds");
+        bulletsToRemove.push(index);
+        return;
       }
     });
 
     // Remove expired bullets (in reverse order to maintain indices)
     bulletsToRemove.reverse().forEach((index) => {
       const bullet = this.bullets[index];
-      if (bullet.sprite.parent) {
-        bullet.sprite.parent.removeChild(bullet.sprite);
-      }
-      bullet.sprite.destroy();
+      this.ui.removeBulletSprite(bullet);
       this.bullets.splice(index, 1);
     });
+
+    // Log bullet statistics
+    GunManagerDebugger.logBulletStats(this.bullets);
   }
 
   /**
@@ -258,10 +273,8 @@ export class GunManager {
   removeBullet(index: number): void {
     if (index >= 0 && index < this.bullets.length) {
       const bullet = this.bullets[index];
-      if (bullet.sprite.parent) {
-        bullet.sprite.parent.removeChild(bullet.sprite);
-      }
-      bullet.sprite.destroy();
+      this.ui.removeBulletSprite(bullet);
+      GunManagerDebugger.logBulletRemoved(bullet, "manual");
       this.bullets.splice(index, 1);
     }
   }
@@ -278,16 +291,11 @@ export class GunManager {
     ownerSessionId: string
   ): Bullet {
     // Create bullet sprite
-    const bulletSprite = new Graphics();
-    bulletSprite.circle(0, 0, this.config.bulletSize);
-    bulletSprite.fill(0xffff00); // Yellow bullet
-    bulletSprite.stroke({ width: 1, color: 0xffaa00 });
-    bulletSprite.x = x;
-    bulletSprite.y = y;
-    bulletSprite.rotation = rotation;
-    bulletSprite.zIndex = 150;
-
-    this.container.addChild(bulletSprite);
+    const bulletSprite = this.ui.createBulletSprite(
+      x,
+      y,
+      rotation - Math.PI / 2
+    );
 
     // Create bullet object
     const bullet: Bullet = {
@@ -304,6 +312,8 @@ export class GunManager {
     };
 
     this.bullets.push(bullet);
+    GunManagerDebugger.logBulletCreated(bullet);
+
     return bullet;
   }
 
@@ -312,10 +322,7 @@ export class GunManager {
    */
   clearBullets(): void {
     this.bullets.forEach((bullet) => {
-      if (bullet.sprite.parent) {
-        bullet.sprite.parent.removeChild(bullet.sprite);
-      }
-      bullet.sprite.destroy();
+      this.ui.removeBulletSprite(bullet);
     });
     this.bullets = [];
   }
@@ -325,5 +332,12 @@ export class GunManager {
    */
   destroy(): void {
     this.clearBullets();
+  }
+
+  /**
+   * Enable/disable debug logging
+   */
+  public setDebugEnabled(enabled: boolean): void {
+    GunManagerDebugger.setEnabled(enabled);
   }
 }

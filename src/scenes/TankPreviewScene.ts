@@ -2,11 +2,11 @@ import { Container, Graphics, Text, TextStyle } from "pixi.js";
 import { Scene } from "./Scene";
 import { SceneManager } from "../core/SceneManager";
 import { TankConfigRegistry } from "../core/tanks/TankConfig";
-import { Tank1, Tank1Sprites } from "../core/tanks/Tank1";
+import { TankEntity, TankEntitySprites } from "../core/tanks/TankEntity";
 import { SignInScene } from "./SignInScene";
 
 interface TankPreviewData {
-  tank: Tank1Sprites;
+  tank: TankEntitySprites;
   anchorDot: Graphics;
   gunPivot: Container; // Pivot container for gun rotation
   baseId: string;
@@ -476,7 +476,7 @@ export class TankPreviewScene extends Scene {
   ): Promise<void> {
     try {
       // Create tank with 0,0 initial position (we'll position the container instead)
-      const tank = await Tank1.create({
+      const tank = await TankEntity.create({
         baseId: baseId,
         gunId: gunId,
         initialX: 0,
@@ -503,7 +503,7 @@ export class TankPreviewScene extends Scene {
 
       // Position pivot container at the gun sprite's anchor point
       // Gun container is at (0, 0) in tank container (since initialX=0, initialY=0)
-      // Gun sprite is at (0, gunYOffset) in gun container (after offset applied in Tank1)
+      // Gun sprite is at (0, gunYOffset) in gun container (after offset applied in TankEntity)
       // Anchor point (0.5, 0.2) is at the sprite's position, so it's at (0, gunYOffset) in gun container
       // We position pivot at (0, gunYOffset) relative to tank container to align with anchor point
       gunPivot.x = tank.gun.container.x;

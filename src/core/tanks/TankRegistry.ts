@@ -549,13 +549,13 @@ export function initializeTankRegistry(): void {
  * Example usage:
  *
  * import { initializeTankRegistry } from "./TankRegistry";
- * import { Tank1 } from "./Tank1";
+ * import { TankEntity } from "./TankEntity";
  *
  * // Initialize registry at startup
  * initializeTankRegistry();
  *
  * // Create a tank
- * const tank = await Tank1.create({
+ * const tank = await TankEntity.create({
  *   baseId: "scout_tank_color1",
  *   gunId: "rapid_fire_color1", // Gun ID includes color
  *   initialX: 100,

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Application } from "pixi.js";
-import { Tank1 } from "../../core/tanks/Tank1";
+import { TankEntity } from "../../core/tanks/TankEntity";
 import {
   getTankBaseIdFromIndex,
   getGunIdFromIndex,
@@ -68,7 +68,7 @@ export const TankPreview: React.FC<TankPreviewProps> = ({
       const gunId = getGunIdFromIndex(gunIndex, colorIndex);
 
       try {
-        const tank = await Tank1.create({
+        const tank = await TankEntity.create({
           baseId,
           gunId,
           initialX: width / 2,
@@ -187,7 +187,7 @@ export const TankPreview: React.FC<TankPreviewProps> = ({
       const gunId = getGunIdFromIndex(gunIndex, colorIndex);
 
       try {
-        const tank = await Tank1.create({
+        const tank = await TankEntity.create({
           baseId,
           gunId,
           initialX: width / 2,

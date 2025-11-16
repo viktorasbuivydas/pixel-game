@@ -7,7 +7,7 @@ import { Minimap } from "./mainScene/Minimap";
 import { PlayerMovement } from "../core/PlayerMovement";
 import { GroundManager } from "../core/GroundManager";
 import { GunManager } from "../core/GunManager";
-import { Tank1 } from "../core/tanks/Tank1";
+import { TankEntity } from "../core/tanks/TankEntity";
 import { TankFactory } from "../core/TankFactory";
 import {
   getTankBaseIdFromIndex,
@@ -426,7 +426,7 @@ export class MainScene extends Scene {
           this.ui.setKills(player.kills || 0);
         }
 
-        // Create tank - use Tank1 for all players with their selected configuration
+        // Create tank - use TankEntity for all players with their selected configuration
         let entity: any;
 
         // Get tank selection from player state (from backend) or local cookie/passed property
@@ -466,7 +466,7 @@ export class MainScene extends Scene {
           selection = { colorIndex: 1, baseIndex: 1, gunIndex: 1 };
         }
 
-        // Create tank using Tank1 with selected configuration
+        // Create tank using TankEntity with selected configuration
         const { getTankBaseIdFromIndex, getGunIdFromIndex } = await import(
           "../core/tanks/TankUniqueIds"
         );
@@ -479,7 +479,7 @@ export class MainScene extends Scene {
           selection.colorIndex
         );
 
-        const tank1Entity = await Tank1.create({
+        const tankEntity = await TankEntity.create({
           baseId: baseId,
           gunId: gunId,
           initialX: player.x || 100,
@@ -489,7 +489,7 @@ export class MainScene extends Scene {
 
         // Get gun stats and update GunManager (only for current player)
         if (sessionId === this.currentSessionId) {
-          const gunStats = Tank1.getGunStats(tank1Entity);
+          const gunStats = TankEntity.getGunStats(tankEntity);
           this.gunManager.updateConfig({
             damage: gunStats.damage,
             fireRate: gunStats.fireRate,
@@ -500,18 +500,18 @@ export class MainScene extends Scene {
           });
         }
 
-        // Convert Tank1 format to match TankFactory format for compatibility
+        // Convert TankEntity format to match TankFactory format for compatibility
         entity = {
-          body: tank1Entity.base.base,
-          gun: tank1Entity.gun.gun,
-          container: tank1Entity.container,
-          usernameLabel: tank1Entity.usernameLabel,
-          healthBar: tank1Entity.healthBar,
-          healthBarBackground: tank1Entity.healthBarBackground,
+          body: tankEntity.base.base,
+          gun: tankEntity.gun.gun,
+          container: tankEntity.container,
+          usernameLabel: tankEntity.usernameLabel,
+          healthBar: tankEntity.healthBar,
+          healthBarBackground: tankEntity.healthBarBackground,
         };
 
-        // Store Tank1 entity for later use
-        (entity as any).tank1Entity = tank1Entity;
+        // Store TankEntity for later use
+        (entity as any).tankEntity = tankEntity;
 
         // Create minimap for *this* client only, when *our own* entity is created
         if (sessionId === this.currentSessionId) {
@@ -527,10 +527,10 @@ export class MainScene extends Scene {
         }
 
         // Initialize tank position (from server/player if needed)
-        // For Tank1, the container holds everything, so we position the container
+        // For TankEntity, the container holds everything, so we position the container
         // The base and gun are already positioned correctly inside the container
-        if ((entity as any).tank1Entity) {
-          // Tank1 uses container structure - position the container
+        if ((entity as any).tankEntity) {
+          // TankEntity uses container structure - position the container
           entity.container.x = player.x || 100;
           entity.container.y = player.y || 100;
         } else {
@@ -550,9 +550,9 @@ export class MainScene extends Scene {
           this.tankGunSprite = entity.gun;
 
           // Add player's tank to the viewport
-          // For Tank1, add the container; for TankFactory, add individual sprites
-          if ((entity as any).tank1Entity) {
-            // Tank1 uses a container structure
+          // For TankEntity, add the container; for TankFactory, add individual sprites
+          if ((entity as any).tankEntity) {
+            // TankEntity uses a container structure
             if (!this.viewport.children.includes(entity.container)) {
               this.viewport.addChild(entity.container);
             }
@@ -587,7 +587,7 @@ export class MainScene extends Scene {
 
           // Init player movement for our own tank
           if (this.tankSprite && this.tankGunSprite) {
-            // For Tank1, gun positioning is handled by the container structure
+            // For TankEntity, gun positioning is handled by the container structure
             // No need for gunYOffset since the gun is already positioned correctly
             this.playerMovement = new PlayerMovement(
               app,
@@ -597,7 +597,7 @@ export class MainScene extends Scene {
               {
                 tankRotateSpeed: 0.09,
                 turretRotateSpeed: 0.1,
-                gunYOffset: 0, // Tank1 handles positioning internally
+                gunYOffset: 0, // TankEntity handles positioning internally
               }
             );
           }
@@ -700,10 +700,10 @@ export class MainScene extends Scene {
               // CLIENT-SIDE PREDICTION: For current player, reconcile with server
               // Check if prediction is too far off (reconciliation threshold)
               if (this.tankSprite && this.tankGunSprite) {
-                const currentX = (entity as any).tank1Entity
+                const currentX = (entity as any).tankEntity
                   ? entity.container.x
                   : this.tankSprite.x;
-                const currentY = (entity as any).tank1Entity
+                const currentY = (entity as any).tankEntity
                   ? entity.container.y
                   : this.tankSprite.y;
                 const predictionError = Math.hypot(
@@ -717,8 +717,8 @@ export class MainScene extends Scene {
                 if (predictionError > reconciliationThreshold) {
                   // Snap to server position if too far off
                   const ourEntity = this.playerEntities[this.currentSessionId!];
-                  if (ourEntity && (ourEntity as any).tank1Entity) {
-                    // Tank1 uses container structure
+                  if (ourEntity && (ourEntity as any).tankEntity) {
+                    // TankEntity uses container structure
                     ourEntity.container.x = player.x;
                     ourEntity.container.y = player.y;
                   } else {
@@ -737,8 +737,8 @@ export class MainScene extends Scene {
                   // Smooth correction for small errors
                   const correctionFactor = 0.2; // 20% correction per frame
                   const ourEntity = this.playerEntities[this.currentSessionId!];
-                  if (ourEntity && (ourEntity as any).tank1Entity) {
-                    // Tank1 uses container structure
+                  if (ourEntity && (ourEntity as any).tankEntity) {
+                    // TankEntity uses container structure
                     ourEntity.container.x +=
                       (player.x - ourEntity.container.x) * correctionFactor;
                     ourEntity.container.y +=
@@ -889,7 +889,7 @@ export class MainScene extends Scene {
     if (this.playerMovement && this.currentSessionId) {
       this.playerMovement.update(deltaTime);
 
-      // For Tank1, gun position is handled by container structure
+      // For TankEntity, gun position is handled by container structure
       // PlayerMovement updates the tank sprite, and the gun follows via container
       // No manual gun positioning needed
     }
@@ -907,8 +907,8 @@ export class MainScene extends Scene {
       const t = Math.min(1, elapsed / interp.duration);
 
       // Update interpolated positions
-      if ((entity as any).tank1Entity) {
-        // Tank1 uses container structure - position the container
+      if ((entity as any).tankEntity) {
+        // TankEntity uses container structure - position the container
         entity.container.x = interp.fromX + (interp.toX - interp.fromX) * t;
         entity.container.y = interp.fromY + (interp.toY - interp.fromY) * t;
       } else {
@@ -1157,8 +1157,8 @@ export class MainScene extends Scene {
 
             // Update bot entity positions
             pos = botData.ai.getPosition();
-            if ((botData.entity as any).tank1Entity) {
-              // Tank1 uses container structure - position the container
+            if ((botData.entity as any).tankEntity) {
+              // TankEntity uses container structure - position the container
               botData.entity.container.x = pos.x;
               botData.entity.container.y = pos.y;
               botData.entity.body.rotation = botData.ai.getRotation();
@@ -1262,14 +1262,14 @@ export class MainScene extends Scene {
     }
 
     // Get the world position of the gun sprite
-    // For Tank1, the gun sprite is inside a container, so we need to get its world position
+    // For TankEntity, the gun sprite is inside a container, so we need to get its world position
     const ourEntity = this.playerEntities[this.currentSessionId];
     let gunWorldX: number;
     let gunWorldY: number;
     let gunRotation: number;
 
-    if (ourEntity && (ourEntity as any).tank1Entity) {
-      // Tank1 uses container structure - get world position
+    if (ourEntity && (ourEntity as any).tankEntity) {
+      // TankEntity uses container structure - get world position
       const gunSprite = ourEntity.gun;
       // Get the world transform of the gun sprite
       const worldTransform = gunSprite.worldTransform;
@@ -1295,12 +1295,12 @@ export class MainScene extends Scene {
     );
 
     if (bullet) {
-      // Play fire animation if using Tank1
+      // Play fire animation if using TankEntity
       const ourEntity = this.currentSessionId
         ? this.playerEntities[this.currentSessionId]
         : null;
-      if (ourEntity && (ourEntity as any).tank1Entity) {
-        Tank1.playFireAnimation((ourEntity as any).tank1Entity);
+      if (ourEntity && (ourEntity as any).tankEntity) {
+        TankEntity.playFireAnimation((ourEntity as any).tankEntity);
       }
 
       // Send shooting event to server
@@ -1594,7 +1594,7 @@ export class MainScene extends Scene {
         Math.random() *
           (this.worldBounds.maxY - this.worldBounds.minY - 2 * margin);
 
-      // Create bot entity using Tank1 (same as players)
+      // Create bot entity using TankEntity (same as players)
       const botId = `bot_${this.botCounter++}`;
       const botUsername = `Bot ${i + 1}`;
 
@@ -1606,7 +1606,7 @@ export class MainScene extends Scene {
       const baseId = getTankBaseIdFromIndex(botBaseIndex, botColorIndex);
       const gunId = getGunIdFromIndex(botGunIndex, botColorIndex);
 
-      const tank1Entity = await Tank1.create({
+      const tankEntity = await TankEntity.create({
         baseId: baseId,
         gunId: gunId,
         initialX: randomX,
@@ -1614,24 +1614,24 @@ export class MainScene extends Scene {
         username: botUsername,
       });
 
-      // Convert Tank1 format to match entity format for compatibility
+      // Convert TankEntity format to match entity format for compatibility
       const entity = {
-        body: tank1Entity.base.base,
-        gun: tank1Entity.gun.gun,
-        container: tank1Entity.container,
-        usernameLabel: tank1Entity.usernameLabel,
-        healthBar: tank1Entity.healthBar,
-        healthBarBackground: tank1Entity.healthBarBackground,
+        body: tankEntity.base.base,
+        gun: tankEntity.gun.gun,
+        container: tankEntity.container,
+        usernameLabel: tankEntity.usernameLabel,
+        healthBar: tankEntity.healthBar,
+        healthBarBackground: tankEntity.healthBarBackground,
       };
 
-      // Store Tank1 entity for later use
-      (entity as any).tank1Entity = tank1Entity;
+      // Store TankEntity for later use
+      (entity as any).tankEntity = tankEntity;
 
       // Store bot ID on sprite for self-identification
       (entity.body as any).botId = botId;
       (entity.gun as any).botId = botId;
 
-      // Add to viewport - Tank1 uses container structure
+      // Add to viewport - TankEntity uses container structure
       if (!this.viewport.children.includes(entity.container)) {
         this.viewport.addChild(entity.container);
       }
