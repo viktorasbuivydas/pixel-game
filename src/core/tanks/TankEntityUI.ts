@@ -28,8 +28,10 @@ export class TankEntityUI {
       style: usernameStyle,
     });
     usernameLabel.anchor.set(0.5);
-    const usernameY = y - baseHeight * 0.5 - 15;
-    usernameLabel.x = x;
+    // Position relative to container (0,0) - container center is at (0,0)
+    // Username should be above the tank base
+    const usernameY = -baseHeight * 0.5 - 15;
+    usernameLabel.x = 0; // Center of container
     usernameLabel.y = usernameY;
     usernameLabel.zIndex = 100;
 
@@ -46,8 +48,9 @@ export class TankEntityUI {
   ): Graphics {
     const healthBarWidth = 60;
     const healthBarHeight = 6;
-    const healthBarX = x - healthBarWidth / 2;
-    const healthBarY = usernameY + 12;
+    // Position relative to container (0,0)
+    const healthBarX = -healthBarWidth / 2; // Center horizontally
+    const healthBarY = usernameY + 12; // Below username (usernameY is already relative)
 
     const healthBarBackground = new Graphics();
     healthBarBackground.roundRect(
@@ -60,6 +63,12 @@ export class TankEntityUI {
     healthBarBackground.fill(0x333333);
     healthBarBackground.stroke({ width: 1, color: 0x000000 });
     healthBarBackground.zIndex = 99;
+
+    // Store position for later updates
+    (healthBarBackground as any).healthBarX = healthBarX;
+    (healthBarBackground as any).healthBarY = healthBarY;
+    (healthBarBackground as any).healthBarWidth = healthBarWidth;
+    (healthBarBackground as any).healthBarHeight = healthBarHeight;
 
     return healthBarBackground;
   }
@@ -75,14 +84,20 @@ export class TankEntityUI {
   ): Graphics {
     const healthBarWidth = 60;
     const healthBarHeight = 6;
-    const healthBarX = x - healthBarWidth / 2;
-    const healthBarY = usernameY + 12;
+    // Position relative to container (0,0)
+    const healthBarX = -healthBarWidth / 2; // Center horizontally
+    const healthBarY = usernameY + 12; // Below username (usernameY is already relative)
 
     const healthBar = new Graphics();
     healthBar.zIndex = 100;
 
     // Store current health for later updates
     (healthBar as any).currentHealth = initialHealth;
+    // Store position for updates
+    (healthBar as any).healthBarX = healthBarX;
+    (healthBar as any).healthBarY = healthBarY;
+    (healthBar as any).healthBarWidth = healthBarWidth;
+    (healthBar as any).healthBarHeight = healthBarHeight;
 
     // Initialize with full health
     this.updateHealthBar(
@@ -133,7 +148,9 @@ export class TankEntityUI {
   }
 
   /**
-   * Update UI element positions
+   * Update UI element positions (relative to container)
+   * Note: Since UI elements are children of the container, they move automatically
+   * This method is kept for compatibility but positions are relative to container (0,0)
    */
   public static updateUIPositions(
     usernameLabel: Text | undefined,
@@ -143,40 +160,24 @@ export class TankEntityUI {
     y: number,
     baseHeight: number
   ): void {
-    if (usernameLabel) {
-      const usernameY = y - baseHeight * 0.5 - 15;
-      usernameLabel.x = x;
-      usernameLabel.y = usernameY;
+    // UI elements are children of container, so they're positioned relative to container (0,0)
+    // No need to update positions since container movement handles it automatically
+    // Only update health bar value if needed
+    if (healthBar) {
+      const currentHealth = (healthBar as any).currentHealth ?? 100;
+      const healthBarX = (healthBar as any).healthBarX ?? -30;
+      const healthBarY = (healthBar as any).healthBarY ?? -baseHeight * 0.5 - 3;
+      const healthBarWidth = (healthBar as any).healthBarWidth ?? 60;
+      const healthBarHeight = (healthBar as any).healthBarHeight ?? 6;
 
-      if (healthBar && healthBarBackground) {
-        const healthBarWidth = 60;
-        const healthBarHeight = 6;
-        const healthBarX = x - healthBarWidth / 2;
-        const healthBarY = usernameY + 12;
-
-        // Update health bar background position
-        healthBarBackground.clear();
-        healthBarBackground.roundRect(
-          healthBarX,
-          healthBarY,
-          healthBarWidth,
-          healthBarHeight,
-          2
-        );
-        healthBarBackground.fill(0x333333);
-        healthBarBackground.stroke({ width: 1, color: 0x000000 });
-
-        // Update health bar position (preserve current health value)
-        const currentHealth = (healthBar as any).currentHealth ?? 100;
-        this.updateHealthBar(
-          healthBar,
-          healthBarX,
-          healthBarY,
-          healthBarWidth,
-          healthBarHeight,
-          currentHealth
-        );
-      }
+      this.updateHealthBar(
+        healthBar,
+        healthBarX,
+        healthBarY,
+        healthBarWidth,
+        healthBarHeight,
+        currentHealth
+      );
     }
   }
 }

@@ -8,7 +8,6 @@ import { PlayerMovement } from "../core/PlayerMovement";
 import { GroundManager } from "../core/GroundManager";
 import { GunManager } from "../core/GunManager";
 import { TankEntity } from "../core/tanks/TankEntity";
-import { TankFactory } from "../core/TankFactory";
 import {
   getTankBaseIdFromIndex,
   getGunIdFromIndex,
@@ -344,33 +343,17 @@ export class MainScene extends Scene {
 
         // Update health bar for the affected player
         const entity = this.playerEntities[message.sessionId];
-        if (
-          entity &&
-          entity.healthBar &&
-          entity.healthBarBackground &&
-          entity.body &&
-          entity.usernameLabel
-        ) {
-          const usernameY = entity.body.y - entity.body.height * 0.5 - 15;
-          const healthBarWidth = 60;
-          const healthBarHeight = 6;
-          const healthBarX = entity.body.x - healthBarWidth / 2;
-          const healthBarY = usernameY + 12;
+        if (entity && entity.healthBar) {
+          // Update health bar value only (UI elements are children of container, so they move automatically)
+          const healthBarX = (entity.healthBar as any).healthBarX ?? -30;
+          const healthBarY =
+            (entity.healthBar as any).healthBarY ??
+            -entity.body.height * 0.5 - 3;
+          const healthBarWidth = (entity.healthBar as any).healthBarWidth ?? 60;
+          const healthBarHeight =
+            (entity.healthBar as any).healthBarHeight ?? 6;
 
-          // Update background position
-          entity.healthBarBackground.clear();
-          entity.healthBarBackground.roundRect(
-            healthBarX,
-            healthBarY,
-            healthBarWidth,
-            healthBarHeight,
-            2
-          );
-          entity.healthBarBackground.fill(0x333333);
-          entity.healthBarBackground.stroke({ width: 1, color: 0x000000 });
-
-          // Update health bar
-          TankFactory.updateHealthBar(
+          TankEntity.updateHealthBar(
             entity.healthBar,
             healthBarX,
             healthBarY,
@@ -500,7 +483,7 @@ export class MainScene extends Scene {
           });
         }
 
-        // Convert TankEntity format to match TankFactory format for compatibility
+        // Store entity structure
         entity = {
           body: tankEntity.base.base,
           gun: tankEntity.gun.gun,
@@ -527,19 +510,9 @@ export class MainScene extends Scene {
         }
 
         // Initialize tank position (from server/player if needed)
-        // For TankEntity, the container holds everything, so we position the container
-        // The base and gun are already positioned correctly inside the container
-        if ((entity as any).tankEntity) {
-          // TankEntity uses container structure - position the container
-          entity.container.x = player.x || 100;
-          entity.container.y = player.y || 100;
-        } else {
-          // Legacy TankFactory - position individual sprites
-          entity.body.x = player.x || 100;
-          entity.body.y = player.y || 100;
-          entity.gun.x = entity.body.x;
-          entity.gun.y = entity.body.y;
-        }
+        // TankEntity uses container structure - position the container
+        entity.container.x = player.x || 100;
+        entity.container.y = player.y || 100;
 
         // Store entity
         this.playerEntities[sessionId] = entity;
@@ -550,39 +523,9 @@ export class MainScene extends Scene {
           this.tankGunSprite = entity.gun;
 
           // Add player's tank to the viewport
-          // For TankEntity, add the container; for TankFactory, add individual sprites
-          if ((entity as any).tankEntity) {
-            // TankEntity uses a container structure
-            if (!this.viewport.children.includes(entity.container)) {
-              this.viewport.addChild(entity.container);
-            }
-          } else {
-            // TankFactory uses individual sprites
-            if (!this.viewport.children.includes(entity.body)) {
-              this.viewport.addChild(entity.body);
-            }
-            if (!this.viewport.children.includes(entity.gun)) {
-              this.viewport.addChild(entity.gun);
-            }
-            if (
-              entity.usernameLabel &&
-              !this.viewport.children.includes(entity.usernameLabel)
-            ) {
-              this.viewport.addChild(entity.usernameLabel);
-            }
-            // Add health bars for our own tank
-            if (
-              entity.healthBarBackground &&
-              !this.viewport.children.includes(entity.healthBarBackground)
-            ) {
-              this.viewport.addChild(entity.healthBarBackground);
-            }
-            if (
-              entity.healthBar &&
-              !this.viewport.children.includes(entity.healthBar)
-            ) {
-              this.viewport.addChild(entity.healthBar);
-            }
+          // TankEntity uses a container structure
+          if (!this.viewport.children.includes(entity.container)) {
+            this.viewport.addChild(entity.container);
           }
 
           // Init player movement for our own tank
@@ -632,11 +575,8 @@ export class MainScene extends Scene {
           // Camera following will be handled manually in update() for better control
         } else {
           // Add other players' tanks to viewport
-          if (!this.viewport.children.includes(entity.body)) {
-            this.viewport.addChild(entity.body);
-          }
-          if (!this.viewport.children.includes(entity.gun)) {
-            this.viewport.addChild(entity.gun);
+          if (!this.viewport.children.includes(entity.container)) {
+            this.viewport.addChild(entity.container);
           }
           if (
             entity.usernameLabel &&
@@ -700,12 +640,9 @@ export class MainScene extends Scene {
               // CLIENT-SIDE PREDICTION: For current player, reconcile with server
               // Check if prediction is too far off (reconciliation threshold)
               if (this.tankSprite && this.tankGunSprite) {
-                const currentX = (entity as any).tankEntity
-                  ? entity.container.x
-                  : this.tankSprite.x;
-                const currentY = (entity as any).tankEntity
-                  ? entity.container.y
-                  : this.tankSprite.y;
+                const ourEntity = this.playerEntities[this.currentSessionId!];
+                const currentX = ourEntity.container.x;
+                const currentY = ourEntity.container.y;
                 const predictionError = Math.hypot(
                   currentX - player.x,
                   currentY - player.y
@@ -716,42 +653,19 @@ export class MainScene extends Scene {
                 const reconciliationThreshold = 50;
                 if (predictionError > reconciliationThreshold) {
                   // Snap to server position if too far off
-                  const ourEntity = this.playerEntities[this.currentSessionId!];
-                  if (ourEntity && (ourEntity as any).tankEntity) {
-                    // TankEntity uses container structure
-                    ourEntity.container.x = player.x;
-                    ourEntity.container.y = player.y;
-                  } else {
-                    // Legacy TankFactory
-                    this.tankSprite.x = player.x;
-                    this.tankSprite.y = player.y;
-                    this.tankGunSprite.x = player.x;
-                    this.tankGunSprite.y = player.y;
-                  }
+                  ourEntity.container.x = player.x;
+                  ourEntity.container.y = player.y;
                   if (this.playerMovement) {
                     (this.playerMovement as any).tankAngle = player.rotation;
                     // Don't override gun rotation for current player - let PlayerMovement handle it from mouse
-                    // (this.playerMovement as any).tankGunSprite.rotation = player.gunRotation;
                   }
                 } else if (predictionError > 5) {
                   // Smooth correction for small errors
                   const correctionFactor = 0.2; // 20% correction per frame
-                  const ourEntity = this.playerEntities[this.currentSessionId!];
-                  if (ourEntity && (ourEntity as any).tankEntity) {
-                    // TankEntity uses container structure
-                    ourEntity.container.x +=
-                      (player.x - ourEntity.container.x) * correctionFactor;
-                    ourEntity.container.y +=
-                      (player.y - ourEntity.container.y) * correctionFactor;
-                  } else {
-                    // Legacy TankFactory
-                    this.tankSprite.x +=
-                      (player.x - this.tankSprite.x) * correctionFactor;
-                    this.tankSprite.y +=
-                      (player.y - this.tankSprite.y) * correctionFactor;
-                    this.tankGunSprite.x = this.tankSprite.x;
-                    this.tankGunSprite.y = this.tankSprite.y;
-                  }
+                  ourEntity.container.x +=
+                    (player.x - ourEntity.container.x) * correctionFactor;
+                  ourEntity.container.y +=
+                    (player.y - ourEntity.container.y) * correctionFactor;
                 }
                 // For very small errors (< 5px), don't correct to avoid jitter
               }
@@ -771,8 +685,8 @@ export class MainScene extends Scene {
                 interpolationData.toGunRotation !== player.gunRotation
               ) {
                 // Start new interpolation
-                const currentX = entity.body.x || player.x;
-                const currentY = entity.body.y || player.y;
+                const currentX = entity.container.x;
+                const currentY = entity.container.y;
                 const currentRotation = entity.body.rotation || player.rotation;
                 const currentGunRotation =
                   entity.gun.rotation || player.gunRotation;
@@ -794,17 +708,9 @@ export class MainScene extends Scene {
               // The actual interpolation happens in the update loop for smooth frame-by-frame updates
             }
 
-            // Update username label position and text if username changed
-            // For current player, use predicted position; for others, interpolation handles it in update loop
+            // Update username label text if username changed
+            // Note: UI elements are children of container, so they move automatically with container
             if (entity.usernameLabel && isCurrentPlayer) {
-              const usernameY =
-                (isCurrentPlayer ? this.tankSprite?.y : entity.body.y) -
-                entity.body.height * 0.5 -
-                15;
-              entity.usernameLabel.x = isCurrentPlayer
-                ? this.tankSprite?.x || player.x
-                : entity.body.x;
-              entity.usernameLabel.y = usernameY;
               // Update username text if it changed on server
               if (
                 player.username &&
@@ -828,36 +734,20 @@ export class MainScene extends Scene {
                 this.updatePlayersList();
               }
 
-              // Update health bar position and value
-              if (entity.healthBar && entity.healthBarBackground) {
-                const healthBarWidth = 60;
-                const healthBarHeight = 6;
-                // Use predicted position for current player, server position for others
-                const currentX = isCurrentPlayer
-                  ? this.tankSprite?.x || player.x
-                  : player.x;
-                const healthBarX = currentX - healthBarWidth / 2;
-                const healthBarY = usernameY + 12;
-
-                // Update background position
-                entity.healthBarBackground.clear();
-                entity.healthBarBackground.roundRect(
-                  healthBarX,
-                  healthBarY,
-                  healthBarWidth,
-                  healthBarHeight,
-                  2
-                );
-                entity.healthBarBackground.fill(0x333333);
-                entity.healthBarBackground.stroke({
-                  width: 1,
-                  color: 0x000000,
-                });
-
-                // Update health bar with current health from server
+              // Update health bar value only (position is relative to container)
+              if (entity.healthBar) {
                 const health =
                   player.health || this.playerHealth[player.sessionId] || 100;
-                TankFactory.updateHealthBar(
+                const healthBarX = (entity.healthBar as any).healthBarX ?? -30;
+                const healthBarY =
+                  (entity.healthBar as any).healthBarY ??
+                  -entity.body.height * 0.5 - 3;
+                const healthBarWidth =
+                  (entity.healthBar as any).healthBarWidth ?? 60;
+                const healthBarHeight =
+                  (entity.healthBar as any).healthBarHeight ?? 6;
+
+                TankEntity.updateHealthBar(
                   entity.healthBar,
                   healthBarX,
                   healthBarY,
@@ -867,7 +757,6 @@ export class MainScene extends Scene {
                 );
               }
             }
-            console.log("entity", entity.body.x, entity.body.y);
           }
         });
       });
@@ -907,17 +796,8 @@ export class MainScene extends Scene {
       const t = Math.min(1, elapsed / interp.duration);
 
       // Update interpolated positions
-      if ((entity as any).tankEntity) {
-        // TankEntity uses container structure - position the container
-        entity.container.x = interp.fromX + (interp.toX - interp.fromX) * t;
-        entity.container.y = interp.fromY + (interp.toY - interp.fromY) * t;
-      } else {
-        // Legacy TankFactory - position individual sprites
-        entity.body.x = interp.fromX + (interp.toX - interp.fromX) * t;
-        entity.body.y = interp.fromY + (interp.toY - interp.fromY) * t;
-        entity.gun.x = entity.body.x;
-        entity.gun.y = entity.body.y;
-      }
+      entity.container.x = interp.fromX + (interp.toX - interp.fromX) * t;
+      entity.container.y = interp.fromY + (interp.toY - interp.fromY) * t;
 
       // Angular interpolation
       const rotDiff =
@@ -931,11 +811,23 @@ export class MainScene extends Scene {
         Math.PI;
       entity.gun.rotation = interp.fromGunRotation + gunRotDiff * t;
 
-      // Update username label and health bar positions
-      if (entity.usernameLabel) {
-        const usernameY = entity.body.y - entity.body.height * 0.5 - 15;
-        entity.usernameLabel.x = entity.body.x;
-        entity.usernameLabel.y = usernameY;
+      // Update health bar value only (UI elements are children of container, so they move automatically)
+      if (entity.healthBar) {
+        const health = this.playerHealth[sessionId] || 100;
+        const healthBarX = (entity.healthBar as any).healthBarX ?? -30;
+        const healthBarY =
+          (entity.healthBar as any).healthBarY ?? -entity.body.height * 0.5 - 3;
+        const healthBarWidth = (entity.healthBar as any).healthBarWidth ?? 60;
+        const healthBarHeight = (entity.healthBar as any).healthBarHeight ?? 6;
+
+        TankEntity.updateHealthBar(
+          entity.healthBar,
+          healthBarX,
+          healthBarY,
+          healthBarWidth,
+          healthBarHeight,
+          health
+        );
       }
     }
 
@@ -948,9 +840,13 @@ export class MainScene extends Scene {
         // Only include alive players (health > 0)
         const health = this.playerHealth[sessionId] || 100;
         if (health > 0) {
+          // Use container position
+          const x = entity.container.x;
+          const y = entity.container.y;
+
           tankHitboxes.push({
-            x: entity.body.x,
-            y: entity.body.y,
+            x: x,
+            y: y,
             width: entity.body.width * entity.body.scale.x,
             height: entity.body.height * entity.body.scale.y,
             sessionId: sessionId,
@@ -965,8 +861,8 @@ export class MainScene extends Scene {
         const health = this.playerHealth[botId] || 100;
         if (health > 0) {
           tankHitboxes.push({
-            x: botData.entity.body.x,
-            y: botData.entity.body.y,
+            x: botData.entity.container.x,
+            y: botData.entity.container.y,
             width: botData.entity.body.width * botData.entity.body.scale.x,
             height: botData.entity.body.height * botData.entity.body.scale.y,
             sessionId: botId,
@@ -980,85 +876,49 @@ export class MainScene extends Scene {
       this.gunManager.update(deltaTime, this.worldBounds, tankHitboxes);
     }
 
-    // Sync username label and health bar position with tank position
+    // Update health bar value for current player (UI elements are children of container, so they move automatically)
     const ourEntity = this.currentSessionId
       ? this.playerEntities[this.currentSessionId]
       : null;
-    if (ourEntity && ourEntity.usernameLabel && this.tankSprite) {
-      // Update username label position to stay above tank
-      const usernameY = this.tankSprite.y - this.tankSprite.height * 0.5 - 15;
-      ourEntity.usernameLabel.x = this.tankSprite.x;
-      ourEntity.usernameLabel.y = usernameY;
+    if (ourEntity && ourEntity.healthBar) {
+      const health = this.currentSessionId
+        ? this.playerHealth[this.currentSessionId] || 100
+        : 100;
+      const healthBarX = (ourEntity.healthBar as any).healthBarX ?? -30;
+      const healthBarY =
+        (ourEntity.healthBar as any).healthBarY ??
+        -ourEntity.body.height * 0.5 - 3;
+      const healthBarWidth = (ourEntity.healthBar as any).healthBarWidth ?? 60;
+      const healthBarHeight = (ourEntity.healthBar as any).healthBarHeight ?? 6;
 
-      // Update health bar position
-      if (ourEntity.healthBar && ourEntity.healthBarBackground) {
-        const healthBarWidth = 60;
-        const healthBarHeight = 6;
-        const healthBarX = this.tankSprite.x - healthBarWidth / 2;
-        const healthBarY = usernameY + 12;
-
-        // Update background position
-        ourEntity.healthBarBackground.clear();
-        ourEntity.healthBarBackground.roundRect(
-          healthBarX,
-          healthBarY,
-          healthBarWidth,
-          healthBarHeight,
-          2
-        );
-        ourEntity.healthBarBackground.fill(0x333333);
-        ourEntity.healthBarBackground.stroke({ width: 1, color: 0x000000 });
-
-        // Update health bar with current health
-        const health = this.currentSessionId
-          ? this.playerHealth[this.currentSessionId] || 100
-          : 100;
-        TankFactory.updateHealthBar(
-          ourEntity.healthBar,
-          healthBarX,
-          healthBarY,
-          healthBarWidth,
-          healthBarHeight,
-          health
-        );
-      }
+      TankEntity.updateHealthBar(
+        ourEntity.healthBar,
+        healthBarX,
+        healthBarY,
+        healthBarWidth,
+        healthBarHeight,
+        health
+      );
     }
 
     // Update health bars for all players (only if they exist and are alive)
+    // Note: UI elements are children of container, so they move automatically
     for (const [sessionId, entity] of Object.entries(this.playerEntities)) {
-      if (
-        entity &&
-        entity.body &&
-        entity.usernameLabel &&
-        entity.healthBar &&
-        entity.healthBarBackground
-      ) {
+      if (entity && entity.body && entity.healthBar) {
         // Skip if player is dead (health <= 0)
         const health = this.playerHealth[sessionId] || 100;
         if (health <= 0) {
           continue;
         }
 
-        const usernameY = entity.body.y - entity.body.height * 0.5 - 15;
-        const healthBarWidth = 60;
-        const healthBarHeight = 6;
-        const healthBarX = entity.body.x - healthBarWidth / 2;
-        const healthBarY = usernameY + 12;
+        // Update health bar value only (position is relative to container)
+        const healthBarX = (entity.healthBar as any).healthBarX ?? -30;
+        const healthBarY =
+          (entity.healthBar as any).healthBarY ?? -entity.body.height * 0.5 - 3;
+        const healthBarWidth = (entity.healthBar as any).healthBarWidth ?? 60;
+        const healthBarHeight = (entity.healthBar as any).healthBarHeight ?? 6;
 
-        // Update background position
-        entity.healthBarBackground.clear();
-        entity.healthBarBackground.roundRect(
-          healthBarX,
-          healthBarY,
-          healthBarWidth,
-          healthBarHeight,
-          2
-        );
-        entity.healthBarBackground.fill(0x333333);
-        entity.healthBarBackground.stroke({ width: 1, color: 0x000000 });
-
-        // Update health bar with current health
-        TankFactory.updateHealthBar(
+        TankEntity.updateHealthBar(
           entity.healthBar,
           healthBarX,
           healthBarY,
@@ -1103,8 +963,8 @@ export class MainScene extends Scene {
           const health = this.playerHealth[sessionId] || 100;
           if (health > 0) {
             playerPositions.push({
-              x: entity.body.x,
-              y: entity.body.y,
+              x: entity.container.x,
+              y: entity.container.y,
               sessionId: sessionId,
             });
           }
@@ -1157,65 +1017,36 @@ export class MainScene extends Scene {
 
             // Update bot entity positions
             pos = botData.ai.getPosition();
-            if ((botData.entity as any).tankEntity) {
-              // TankEntity uses container structure - position the container
-              botData.entity.container.x = pos.x;
-              botData.entity.container.y = pos.y;
-              botData.entity.body.rotation = botData.ai.getRotation();
-              botData.entity.gun.rotation = botData.ai.getGunRotation();
-            } else {
-              // Legacy TankFactory - position individual sprites
-              botData.entity.body.x = pos.x;
-              botData.entity.body.y = pos.y;
-              botData.entity.body.rotation = botData.ai.getRotation();
-              botData.entity.gun.x = pos.x;
-              botData.entity.gun.y = pos.y;
-              botData.entity.gun.rotation = botData.ai.getGunRotation();
-            }
+            // TankEntity uses container structure - position the container
+            botData.entity.container.x = pos.x;
+            botData.entity.container.y = pos.y;
+            botData.entity.body.rotation = botData.ai.getRotation();
+            botData.entity.gun.rotation = botData.ai.getGunRotation();
           } else {
             // Get position without updating AI (for UI positioning)
             pos = botData.ai.getPosition();
           }
 
-          // Update bot username label and health bar position
-          if (botData.entity.usernameLabel && pos) {
-            const usernameY = pos.y - botData.entity.body.height * 0.5 - 15;
-            botData.entity.usernameLabel.x = pos.x;
-            botData.entity.usernameLabel.y = usernameY;
+          // Update bot health bar value only (UI elements are children of container, so they move automatically)
+          if (botData.entity.healthBar) {
+            const healthBarX =
+              (botData.entity.healthBar as any).healthBarX ?? -30;
+            const healthBarY =
+              (botData.entity.healthBar as any).healthBarY ??
+              -botData.entity.body.height * 0.5 - 3;
+            const healthBarWidth =
+              (botData.entity.healthBar as any).healthBarWidth ?? 60;
+            const healthBarHeight =
+              (botData.entity.healthBar as any).healthBarHeight ?? 6;
 
-            // Update health bar
-            if (
-              botData.entity.healthBar &&
-              botData.entity.healthBarBackground
-            ) {
-              const healthBarWidth = 60;
-              const healthBarHeight = 6;
-              const healthBarX = pos.x - healthBarWidth / 2;
-              const healthBarY = usernameY + 12;
-
-              botData.entity.healthBarBackground.clear();
-              botData.entity.healthBarBackground.roundRect(
-                healthBarX,
-                healthBarY,
-                healthBarWidth,
-                healthBarHeight,
-                2
-              );
-              botData.entity.healthBarBackground.fill(0x333333);
-              botData.entity.healthBarBackground.stroke({
-                width: 1,
-                color: 0x000000,
-              });
-
-              TankFactory.updateHealthBar(
-                botData.entity.healthBar,
-                healthBarX,
-                healthBarY,
-                healthBarWidth,
-                healthBarHeight,
-                health
-              );
-            }
+            TankEntity.updateHealthBar(
+              botData.entity.healthBar,
+              healthBarX,
+              healthBarY,
+              healthBarWidth,
+              healthBarHeight,
+              health
+            );
           }
         }
       }
@@ -1262,29 +1093,17 @@ export class MainScene extends Scene {
     }
 
     // Get the world position of the gun sprite
-    // For TankEntity, the gun sprite is inside a container, so we need to get its world position
+    // TankEntity uses container structure - get world position
     const ourEntity = this.playerEntities[this.currentSessionId];
-    let gunWorldX: number;
-    let gunWorldY: number;
-    let gunRotation: number;
-
-    if (ourEntity && (ourEntity as any).tankEntity) {
-      // TankEntity uses container structure - get world position
-      const gunSprite = ourEntity.gun;
-      // Get the world transform of the gun sprite
-      const worldTransform = gunSprite.worldTransform;
-      // The gun sprite's anchor point (rotation point) is at its local (0, 0) after anchor is set
-      // Get the world position of the anchor point
-      gunWorldX = worldTransform.tx;
-      gunWorldY = worldTransform.ty;
-      // Get the world rotation (container rotation + gun rotation)
-      gunRotation = gunSprite.rotation;
-    } else {
-      // Legacy TankFactory - use sprite position directly
-      gunWorldX = this.tankGunSprite.x;
-      gunWorldY = this.tankGunSprite.y;
-      gunRotation = this.tankGunSprite.rotation;
-    }
+    const gunSprite = ourEntity.gun;
+    // Get the world transform of the gun sprite
+    const worldTransform = gunSprite.worldTransform;
+    // The gun sprite's anchor point (rotation point) is at its local (0, 0) after anchor is set
+    // Get the world position of the anchor point
+    const gunWorldX = worldTransform.tx;
+    const gunWorldY = worldTransform.ty;
+    // Get the world rotation (container rotation + gun rotation)
+    const gunRotation = gunSprite.rotation;
 
     // Shoot bullet from gun position and rotation
     const bullet = this.gunManager.shoot(
@@ -1295,12 +1114,15 @@ export class MainScene extends Scene {
     );
 
     if (bullet) {
-      // Play fire animation if using TankEntity
+      // Play fire animation
       const ourEntity = this.currentSessionId
         ? this.playerEntities[this.currentSessionId]
         : null;
-      if (ourEntity && (ourEntity as any).tankEntity) {
-        TankEntity.playFireAnimation((ourEntity as any).tankEntity);
+      if (ourEntity) {
+        const tankEntity = (ourEntity as any).tankEntity;
+        if (tankEntity) {
+          TankEntity.playFireAnimation(tankEntity);
+        }
       }
 
       // Send shooting event to server
@@ -1351,36 +1173,19 @@ export class MainScene extends Scene {
       const newHealth = Math.max(0, currentHealth - bullet.damage);
       this.playerHealth[targetSessionId] = newHealth;
 
-      // Update health bar
+      // Update health bar value only (UI elements are children of container, so they move automatically)
       const botData = this.bots.get(targetSessionId);
-      if (
-        botData &&
-        botData.entity &&
-        botData.entity.healthBar &&
-        botData.entity.healthBarBackground
-      ) {
-        const pos = botData.ai.getPosition();
-        const usernameY = pos.y - botData.entity.body.height * 0.5 - 15;
-        const healthBarWidth = 60;
-        const healthBarHeight = 6;
-        const healthBarX = pos.x - healthBarWidth / 2;
-        const healthBarY = usernameY + 12;
+      if (botData && botData.entity && botData.entity.healthBar) {
+        const healthBarX = (botData.entity.healthBar as any).healthBarX ?? -30;
+        const healthBarY =
+          (botData.entity.healthBar as any).healthBarY ??
+          -botData.entity.body.height * 0.5 - 3;
+        const healthBarWidth =
+          (botData.entity.healthBar as any).healthBarWidth ?? 60;
+        const healthBarHeight =
+          (botData.entity.healthBar as any).healthBarHeight ?? 6;
 
-        botData.entity.healthBarBackground.clear();
-        botData.entity.healthBarBackground.roundRect(
-          healthBarX,
-          healthBarY,
-          healthBarWidth,
-          healthBarHeight,
-          2
-        );
-        botData.entity.healthBarBackground.fill(0x333333);
-        botData.entity.healthBarBackground.stroke({
-          width: 1,
-          color: 0x000000,
-        });
-
-        TankFactory.updateHealthBar(
+        TankEntity.updateHealthBar(
           botData.entity.healthBar,
           healthBarX,
           healthBarY,
@@ -1434,24 +1239,17 @@ export class MainScene extends Scene {
             entity.body &&
             entity.usernameLabel
           ) {
-            const usernameY = entity.body.y - entity.body.height * 0.5 - 15;
-            const healthBarWidth = 60;
-            const healthBarHeight = 6;
-            const healthBarX = entity.body.x - healthBarWidth / 2;
-            const healthBarY = usernameY + 12;
+            // Update health bar value only (UI elements are children of container, so they move automatically)
+            const healthBarX = (entity.healthBar as any).healthBarX ?? -30;
+            const healthBarY =
+              (entity.healthBar as any).healthBarY ??
+              -entity.body.height * 0.5 - 3;
+            const healthBarWidth =
+              (entity.healthBar as any).healthBarWidth ?? 60;
+            const healthBarHeight =
+              (entity.healthBar as any).healthBarHeight ?? 6;
 
-            entity.healthBarBackground.clear();
-            entity.healthBarBackground.roundRect(
-              healthBarX,
-              healthBarY,
-              healthBarWidth,
-              healthBarHeight,
-              2
-            );
-            entity.healthBarBackground.fill(0x333333);
-            entity.healthBarBackground.stroke({ width: 1, color: 0x000000 });
-
-            TankFactory.updateHealthBar(
+            TankEntity.updateHealthBar(
               entity.healthBar,
               healthBarX,
               healthBarY,
@@ -1529,32 +1327,10 @@ export class MainScene extends Scene {
       return;
     }
 
-    // Remove all sprites from viewport
-    if (entity.body && this.viewport.children.includes(entity.body)) {
-      this.viewport.removeChild(entity.body);
-      entity.body.destroy();
-    }
-    if (entity.gun && this.viewport.children.includes(entity.gun)) {
-      this.viewport.removeChild(entity.gun);
-      entity.gun.destroy();
-    }
-    if (
-      entity.usernameLabel &&
-      this.viewport.children.includes(entity.usernameLabel)
-    ) {
-      this.viewport.removeChild(entity.usernameLabel);
-      entity.usernameLabel.destroy();
-    }
-    if (entity.healthBar && this.viewport.children.includes(entity.healthBar)) {
-      this.viewport.removeChild(entity.healthBar);
-      entity.healthBar.destroy();
-    }
-    if (
-      entity.healthBarBackground &&
-      this.viewport.children.includes(entity.healthBarBackground)
-    ) {
-      this.viewport.removeChild(entity.healthBarBackground);
-      entity.healthBarBackground.destroy();
+    // Remove container from viewport (TankEntity uses container structure)
+    if (entity.container && this.viewport.children.includes(entity.container)) {
+      this.viewport.removeChild(entity.container);
+      entity.container.destroy({ children: true });
     }
 
     // Remove from entities map
